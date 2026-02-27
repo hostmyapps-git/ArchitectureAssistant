@@ -1,0 +1,15 @@
+[package]
+name = "delta_model_architecture_assistant"
+version = "0.1.0"
+description = "DeltaModel Architecture Assistant desktop wrapper"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+encoding_rs = "0.8"

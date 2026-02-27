@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeltaModel Architecture Assistant</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="appHeader">
+    <div>
+      <h1>DeltaModel Architecture Assistant</h1>
+      <p class="subtitle">Data-centric modeling + diagram-driven modeling with compliance visibility</p>
+    </div>
+    <div class="headerActions">
+      <button id="sidebarToggleBtn" aria-expanded="true">Hide Sidebar</button>
+      <button id="openSettingsBtn" type="button">Settings</button>
+    </div>
+  </header>
+
+  <main id="appLayout" class="layout">
+    <aside id="appSidebar" class="sidebar">
+      <section class="card">
+        <button id="toggleLeftSidebarAllBtn" type="button">Collapse All Left Sidebar</button>
+      </section>
+
+      <section class="card">
+        <div class="sidebarSectionHeader">
+          <h2>MetaModel Information</h2>
+          <button id="toggleSidebarBaselineBtn" class="sidebarSectionToggleBtn" type="button">Collapse</button>
+        </div>
+        <div id="sidebarBaselineBody">
+          <div id="baselineMeta" class="meta"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="sidebarSectionHeader">
+          <h2>View Filter</h2>
+          <button id="resetViewpointFilterBtn" class="sidebarSectionToggleBtn" type="button">Reset</button>
+          <button id="toggleSidebarViewFilterBtn" class="sidebarSectionToggleBtn" type="button">Collapse</button>
+        </div>
+        <div id="sidebarViewFilterBody">
+          <input id="viewpointFilter" list="viewpointFilterList" placeholder="View filter">
+          <datalist id="viewpointFilterList"></datalist>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="sidebarSectionHeader">
+          <h2>Quick Stats</h2>
+          <button id="toggleSidebarStatsBtn" class="sidebarSectionToggleBtn" type="button">Collapse</button>
+        </div>
+        <div id="sidebarStatsBody">
+          <ul class="stats" id="statsList"></ul>
+        </div>
+      </section>
+
+      <div id="sidebarResizeHandle" class="sidebarResizeHandle" title="Drag to resize sidebar"></div>
+    </aside>
+
+    <section class="content">
+      <nav class="tabs" role="tablist" aria-label="Main tabs">
+        <button id="tabBtnData" class="tabBtn active" data-tab="dataTab" role="tab" aria-selected="true" aria-controls="dataTab">Data</button>
+        <button id="tabBtnDiagram" class="tabBtn" data-tab="diagramTab" role="tab" aria-selected="false" aria-controls="diagramTab">Diagram</button>
+        <button id="tabBtnCompliance" class="tabBtn" data-tab="complianceTab" role="tab" aria-selected="false" aria-controls="complianceTab">Compliance</button>
+        <button id="tabBtnMetaModel" class="tabBtn" data-tab="metaModelTab" role="tab" aria-selected="false" aria-controls="metaModelTab">MetaModel</button>
+      </nav>
+
+      <section id="dataTab" class="tabPanel active" role="tabpanel" aria-labelledby="tabBtnData">
+        <div id="dataSplit" class="split">
+          <section id="relationshipCard" class="card">
+            <h2>Add Element</h2>
+            <form id="addElementForm" class="formGrid">
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementName">Name</label>
+                <input id="elementName" placeholder="Element name" required>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementType">Type / Stereotype</label>
+                <input id="elementType" list="elementTypeList" placeholder="Type / Stereotype (select or custom)" required>
+                <datalist id="elementTypeList"></datalist>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementViewpoint">Viewpoint</label>
+                <input id="elementViewpoint" list="elementViewpointList" placeholder="Viewpoint (select or custom)" required>
+                <datalist id="elementViewpointList"></datalist>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementMembers">Members</label>
+                <input id="elementMembers" placeholder="Members (comma separated, e.g. availability=99.9)">
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementFunctions">Functions</label>
+                <input id="elementFunctions" placeholder="Functions (comma separated)">
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementBgColor">Background Color</label>
+                <input id="elementBgColor" list="cssNamedColorList" placeholder="Node bg color (optional, e.g. #eef6ff)">
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementFontColor">Font Color</label>
+                <input id="elementFontColor" list="cssNamedColorList" placeholder="Node font color (optional, e.g. #1f2a44)">
+              </div>
+              <div class="fieldStack fieldSpanFull">
+                <label class="fieldLabel" for="elementDescription">Description</label>
+                <textarea id="elementDescription" class="longTextInput" rows="4" placeholder="Description"></textarea>
+              </div>
+              <button id="elementSubmitBtn" type="submit">Add Element</button>
+              <button id="elementCancelEditBtn" type="button" hidden>Cancel Edit</button>
+            </form>
+            <div class="dataFilterBar">
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementSearchInput">Search</label>
+                <input id="elementSearchInput" placeholder="Search elements (name/type/view/member/function)">
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementViewFilter">View Filter</label>
+                <select id="elementViewFilter" title="Filter elements by viewpoint">
+                  <option value="All">All views</option>
+                </select>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="elementOrphanFilter">Orphan Filter</label>
+                <select id="elementOrphanFilter" title="Filter orphan elements">
+                  <option value="all">All elements</option>
+                  <option value="anyOrphan">Any orphan condition</option>
+                  <option value="noLinks">No relationships</option>
+                  <option value="noDiagram">Not in any diagram</option>
+                  <option value="noView">Not part of a known view</option>
+                  <option value="strictOrphan">No links + no diagram + no view</option>
+                </select>
+              </div>
+            </div>
+            <div class="dataTableWrap">
+              <table id="elementsTable">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Name</th><th>Type</th><th>Viewpoint</th><th>Members</th><th>Functions</th><th>Colors</th><th>Deviation</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div id="dataSplitHandle" class="dataSplitHandle" title="Drag to resize data columns"></div>
+
+          <section class="card">
+            <h2>Add Relationship</h2>
+            <div class="formGrid">
+              <input id="relationshipSearchInput" placeholder="Search relationships (source/target/type/view)">
+              <select id="relationshipViewFilter" title="Filter relationships by viewpoint">
+                <option value="All">All views</option>
+              </select>
+            </div>
+            <form id="addRelationshipForm" class="formGrid">
+              <div class="fieldStack">
+                <label class="fieldLabel" for="relSource">Source Element</label>
+                <div class="fieldWithBadge">
+                  <input id="relSource" list="relSourceList" placeholder="Source element id" required>
+                  <span id="relSourceStatus" class="deviationBadge">Select</span>
+                </div>
+                <datalist id="relSourceList"></datalist>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="relTarget">Target Element</label>
+                <div class="fieldWithBadge">
+                  <input id="relTarget" list="relTargetList" placeholder="Target element id" required>
+                  <span id="relTargetStatus" class="deviationBadge">Select</span>
+                </div>
+                <datalist id="relTargetList"></datalist>
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="relTypeFilter">Relationship Type Filter</label>
+                <input id="relTypeFilter" class="selectFilterInput" placeholder="Filter relationship types...">
+              </div>
+              <div class="fieldStack">
+                <label class="fieldLabel" for="relType">Relationship Type</label>
+                <div class="fieldWithBadge">
+                  <input id="relType" list="relTypeList" placeholder="Relationship type id" required>
+                  <span id="relTypeStatus" class="deviationBadge">Select</span>
+                </div>
+                <datalist id="relTypeList"></datalist>
+              </div>
+              <div class="fieldStack fieldSpanFull">
+                <label class="fieldLabel" for="relDescription">Description</label>
+                <textarea id="relDescription" class="longTextInput" rows="4" placeholder="Description"></textarea>
+              </div>
+              <button id="relationshipSubmitBtn" type="submit">Add Relationship</button>
+              <button id="relationshipCancelEditBtn" type="button" hidden>Cancel Edit</button>
+            </form>
+            <div id="relationshipFilterStats" class="hint"></div>
+            <div id="relationshipValidityHelp" class="hint"></div>
+            <div class="dataTableWrap">
+              <table id="relationshipsTable">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Source</th><th>Target</th><th>Type</th><th>Deviation</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="metaModelTab" class="tabPanel" role="tabpanel" aria-labelledby="tabBtnMetaModel">
+        <section class="card metaModelEditorCard">
+          <h2>MetaModel Editor</h2>
+          <p class="hint">Edit active metamodel structure (`views`, `nodeTypes`, `edgeTypes`) and apply immediately to compliance/dropdowns.</p>
+          <div class="metaModelActionRow">
+            <button id="loadMetaModelBtn" type="button">Load MetaModel</button>
+            <button id="unloadMetaModelBtn" type="button">Unload MetaModel</button>
+            <button id="resetDefaultMetaModelBtn" type="button">Reset To Default MetaModel</button>
+            <button id="applyMetaModelChangesBtn" type="button">Apply MetaModel Changes</button>
+            <button id="exportMetaModelJsonBtn" type="button">Export MetaModel JSON</button>
+          </div>
+          <div class="metaModelEditorGrid">
+            <section class="metaModelPane">
+              <h3>Views</h3>
+              <form id="metaModelViewForm" class="formGrid">
+                <input id="metaModelViewName" placeholder="View name (id)" required>
+                <input id="metaModelViewCategory" placeholder="Category (e.g. C,S,L,P,A)">
+                <input id="metaModelViewDescription" placeholder="Description">
+                <button id="metaModelViewSubmitBtn" type="submit">Add View</button>
+                <button id="metaModelViewCancelBtn" type="button" hidden>Cancel Edit</button>
+              </form>
+              <label class="fieldLabel" for="metaModelViewList">View List</label>
+              <select id="metaModelViewList" class="metaModelList" size="10"></select>
+              <div class="metaModelListActions">
+                <button id="metaModelEditViewBtn" type="button">Edit Selected</button>
+                <button id="metaModelDeleteViewBtn" type="button">Delete Selected</button>
+              </div>
+            </section>
+
+            <section class="metaModelPane">
+              <h3>Category Colors</h3>
+              <div id="categoryLegend" class="meta"></div>
+              <div class="metaModelListActions">
+                <button id="resetColorDefaultsBtn" type="button">Reset Category Colors</button>
+                <button id="clearNodeColorOverridesBtn" type="button">Clear Node Color Overrides</button>
+              </div>
+            </section>
+
+            <section class="metaModelPane">
+              <h3>Node Types</h3>
+              <form id="metaModelNodeTypeForm" class="formGrid">
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelNodeTypeId">Node Type ID</label>
+                  <input id="metaModelNodeTypeId" placeholder="Node type id" required>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelNodeTypeLabel">Label</label>
+                  <input id="metaModelNodeTypeLabel" placeholder="Label">
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelNodeTypeAllowedViews">Allowed Views</label>
+                  <select id="metaModelNodeTypeAllowedViews" multiple title="Allowed views"></select>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelNodeTypeAbstract">Abstract</label>
+                  <label class="inlineCheck">
+                    <input id="metaModelNodeTypeAbstract" type="checkbox">
+                    Abstract
+                  </label>
+                </div>
+                <button id="metaModelNodeTypeSubmitBtn" type="submit">Add Node Type</button>
+                <button id="metaModelNodeTypeCancelBtn" type="button" hidden>Cancel Edit</button>
+              </form>
+              <label class="fieldLabel" for="metaModelNodeTypeList">Node Type List</label>
+              <select id="metaModelNodeTypeList" class="metaModelList" size="10"></select>
+              <div class="metaModelListActions">
+                <button id="metaModelEditNodeTypeBtn" type="button">Edit Selected</button>
+                <button id="metaModelDeleteNodeTypeBtn" type="button">Delete Selected</button>
+              </div>
+            </section>
+
+            <section class="metaModelPane">
+              <h3>Edge Types</h3>
+              <form id="metaModelEdgeTypeForm" class="formGrid">
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeId">Edge Type ID</label>
+                  <input id="metaModelEdgeTypeId" placeholder="Edge type id" required>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeLabel">Label</label>
+                  <input id="metaModelEdgeTypeLabel" placeholder="Label">
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeSourceTypes">Source Node Types</label>
+                  <select id="metaModelEdgeTypeSourceTypes" multiple title="Source node types"></select>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeTargetTypes">Target Node Types</label>
+                  <select id="metaModelEdgeTypeTargetTypes" multiple title="Target node types"></select>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeAllowedViews">Allowed Views</label>
+                  <select id="metaModelEdgeTypeAllowedViews" multiple title="Allowed views"></select>
+                </div>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="metaModelEdgeTypeStrokeStyle">Stroke Style</label>
+                  <select id="metaModelEdgeTypeStrokeStyle" title="Edge stroke style">
+                    <option value="solid">solid</option>
+                    <option value="dashed">dashed</option>
+                    <option value="dotted">dotted</option>
+                  </select>
+                </div>
+                <button id="metaModelEdgeTypeSubmitBtn" type="submit">Add Edge Type</button>
+                <button id="metaModelEdgeTypeCancelBtn" type="button" hidden>Cancel Edit</button>
+              </form>
+              <label class="fieldLabel" for="metaModelEdgeTypeList">Edge Type List</label>
+              <select id="metaModelEdgeTypeList" class="metaModelList" size="10"></select>
+              <div class="metaModelListActions">
+                <button id="metaModelEditEdgeTypeBtn" type="button">Edit Selected</button>
+                <button id="metaModelDeleteEdgeTypeBtn" type="button">Delete Selected</button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+
+      <section id="diagramTab" class="tabPanel" role="tabpanel" aria-labelledby="tabBtnDiagram">
+        <div class="card diagramCard">
+          <div class="diagramWorkspace">
+            <aside class="diagramManagerPane">
+              <h2>Diagram Manager</h2>
+              <div class="leftGuiToggleBar">
+                <button id="toggleLeftAllBtn" type="button">Collapse All Left UI</button>
+              </div>
+              <div class="diagramControls">
+                <section class="dmSection">
+                  <div class="dmSectionHeader">
+                    <h3 class="dmTitle">Diagrams</h3>
+                    <button id="toggleLeftDiagramsBtn" class="dmSectionToggleBtn" type="button">Collapse</button>
+                  </div>
+                  <div id="leftSectionDiagramsBody">
+                    <div class="diagramListBlock">
+                      <div id="diagramList" class="diagramList" title="Click to activate diagram"></div>
+                    </div>
+                    <div class="diagramActionRow">
+                      <button id="deleteActiveDiagramBtn" type="button">Delete Active Diagram</button>
+                    </div>
+                  </div>
+                </section>
+                <section class="dmSection">
+                  <div class="dmSectionHeader">
+                    <h3 class="dmTitle">Create</h3>
+                    <button id="toggleLeftCreateBtn" class="dmSectionToggleBtn" type="button">Collapse</button>
+                  </div>
+                  <div id="leftSectionCreateBody">
+                    <div class="diagramCreateRow">
+                      <input id="newDiagramName" placeholder="New diagram name">
+                      <button id="createDiagramBtn" type="button">Create Diagram</button>
+                    </div>
+                  </div>
+                </section>
+                <section class="dmSection">
+                  <div class="dmSectionHeader">
+                    <h3 class="dmTitle">Edit Active Diagram</h3>
+                    <button id="toggleLeftEditBtn" class="dmSectionToggleBtn" type="button">Collapse</button>
+                  </div>
+                  <p class="hint">
+                    <strong>Name</strong> = label in diagram list. <strong>Title</strong> = heading shown above the canvas.
+                  </p>
+                  <div id="leftSectionEditBody">
+                    <div id="diagramEditBar" class="formGrid">
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramNameInput">Name</label>
+                        <input id="diagramNameInput" placeholder="Name (diagram list label)" title="Used in the clickable diagram list">
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramTypeSelect">Type</label>
+                        <input id="diagramTypeSelect" list="diagramTypeList" placeholder="Diagram type" title="Diagram type">
+                        <datalist id="diagramTypeList">
+                          <option value="standard" label="Standard"></option>
+                          <option value="clickable" label="Clickable"></option>
+                        </datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramTitleInput">Title</label>
+                        <input id="diagramTitleInput" placeholder="Title (displayed above canvas)" title="Shown as diagram heading above the canvas">
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramViewInput">View</label>
+                        <input id="diagramViewInput" list="diagramViewList" placeholder="Diagram view (select or custom)">
+                        <datalist id="diagramViewList"></datalist>
+                      </div>
+                      <button id="applyDiagramMetaBtn" type="button">Apply Name/Title/View</button>
+                    </div>
+                    <div id="standardDiagramControls" class="formGrid">
+                      <div class="fieldStack">
+                        <label id="diagramElementPickerLabel" class="fieldLabel" for="diagramElementPicker">Available Elements</label>
+                        <input id="diagramElementPicker" list="diagramElementPickerList" placeholder="Available elements" title="Available elements">
+                        <datalist id="diagramElementPickerList"></datalist>
+                      </div>
+                      <button id="addElementToDiagramBtn" type="button">Add Element</button>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramElementList">Elements In Diagram</label>
+                        <input id="diagramElementList" list="diagramElementListData" placeholder="Elements in diagram" title="Elements in diagram">
+                        <datalist id="diagramElementListData"></datalist>
+                      </div>
+                      <button id="removeElementFromDiagramBtn" type="button">Remove Element</button>
+                      <input id="newDiagramElementName" placeholder="Create element name">
+                      <input id="newDiagramElementType" list="newDiagramElementTypeList" placeholder="Create element type" title="Create element type">
+                      <datalist id="newDiagramElementTypeList"></datalist>
+                      <input id="newDiagramElementViewpoint" list="newDiagramElementViewpointList" placeholder="Create element viewpoint" title="Create element viewpoint">
+                      <datalist id="newDiagramElementViewpointList"></datalist>
+                      <button id="createAndAddElementBtn" type="button">Create & Add</button>
+                    </div>
+                    <div id="clickableDiagramControls" class="formGrid">
+                      <input id="diagramFocusSelect" list="diagramFocusSelectList" placeholder="Focus element" title="Focus element">
+                      <datalist id="diagramFocusSelectList"></datalist>
+                      <input id="diagramDepthInput" type="number" min="1" step="1" value="1" placeholder="Depth n">
+                    </div>
+                    <div id="diagramFindControls" class="formGrid">
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramFindFilter">Find In Diagram</label>
+                        <input id="diagramFindFilter" placeholder="Filter nodes by name/id/type">
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramFindList">Matches (multi-select)</label>
+                        <select id="diagramFindList" multiple size="8" title="Select one or more nodes"></select>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </aside>
+            <section id="diagramCanvasPane" class="diagramCanvasPane">
+              <div class="rightGuiToggleBar">
+                <button id="toggleRightToolbarBtn" type="button">Collapse Toolbar</button>
+                <button id="toggleRightMetaBtn" type="button">Collapse Meta</button>
+                <button id="toggleRightAllBtn" type="button">Collapse All Right UI</button>
+              </div>
+              <div id="diagramToolbarWrap" class="rightGuiBlock">
+                <div class="diagramToolbar">
+                <button id="addNodeAtCenterBtn">Add Node At Center</button>
+                <button id="connectModeBtn">Connect Mode: Off</button>
+                <button id="resetOrthoLayoutBtn" title="Reset layout to default rendering for current line mode">Reset Layout</button>
+                <select id="lineModeSelect" title="Connector line mode">
+                  <option value="straight">Straight</option>
+                  <option value="curved">Curved</option>
+                  <option value="ortho">Ortho</option>
+                </select>
+                <div class="zoomInputWrap">
+                  <input id="diagramZoomSelect" type="number" min="10" max="400" step="5" placeholder="100" title="Diagram zoom percent">
+                  <span class="zoomSuffix">%</span>
+                </div>
+                <button id="resetDiagramViewBtn" type="button" title="Reset zoom and pan">Reset View</button>
+                <div class="fieldStack">
+                  <label class="fieldLabel" for="diagramRelType">New Relationship Type</label>
+                  <input id="diagramRelType" list="diagramRelTypeList" placeholder="Relationship type (select or custom)">
+                  <datalist id="diagramRelTypeList"></datalist>
+                </div>
+                </div>
+              </div>
+              <div id="diagramMetaWrap" class="rightGuiBlock">
+                <div id="diagramMetaDisplay" class="diagramMetaDisplay"></div>
+              </div>
+              <svg id="diagramSvg" viewBox="0 0 1200 700" aria-label="Architecture diagram"></svg>
+              <div id="selectionDrawerBackdrop" class="selectionDrawerBackdrop" hidden></div>
+              <aside id="selectionDrawer" class="selectionDrawer" hidden>
+                <div class="selectionDrawerHeader">
+                  <h3 class="selectionDrawerTitle">Selection Editor</h3>
+                  <button id="selectionDrawerCloseBtn" type="button" title="Close editor">Close</button>
+                </div>
+                <div class="selectionDrawerBody">
+                  <div id="selectionEmptyHint" class="hint">Click a node or edge in the diagram to edit it.</div>
+                  <div id="selectedNodeEditor" class="formGrid" hidden>
+                    <input id="selectedNodeIdReadonly" placeholder="Node ID" readonly>
+                    <input id="selectedNodeName" placeholder="Node name">
+                    <input id="selectedNodeType" list="selectedNodeTypeList" placeholder="Node type" title="Node type">
+                    <datalist id="selectedNodeTypeList"></datalist>
+                    <input id="selectedNodeViewpoint" list="selectedNodeViewpointList" placeholder="Node viewpoint" title="Node viewpoint">
+                    <datalist id="selectedNodeViewpointList"></datalist>
+                    <textarea id="selectedNodeDescription" class="longTextInput" rows="5" placeholder="Node description"></textarea>
+                    <input id="selectedNodeMembers" placeholder="Members (a=b, c=d)">
+                    <input id="selectedNodeFunctions" placeholder="Functions (comma separated)">
+                    <input id="selectedNodeBgColor" list="cssNamedColorList" placeholder="Node bg color (optional)">
+                    <input id="selectedNodeFontColor" list="cssNamedColorList" placeholder="Node font color (optional)">
+                    <button id="applySelectedNodeBtn" type="button">Apply Node Changes</button>
+                    <button id="removeSelectedNodeFromDiagramBtn" type="button">Remove Node From Active Diagram</button>
+                    <button id="deleteSelectedNodeBtn" type="button">Delete Node</button>
+                  </div>
+                  <div id="selectedEdgeEditor" class="formGrid" hidden>
+                    <input id="selectedEdgeIdReadonly" placeholder="Edge ID" readonly>
+                    <input id="selectedEdgeType" list="selectedEdgeTypeList" placeholder="Edge stereotype/type" title="Edge stereotype/type">
+                    <datalist id="selectedEdgeTypeList"></datalist>
+                    <textarea id="selectedEdgeDescription" class="longTextInput" rows="5" placeholder="Edge description"></textarea>
+                    <button id="applySelectedEdgeBtn" type="button">Apply Edge Changes</button>
+                    <button id="deleteSelectedEdgeBtn" type="button">Delete Edge</button>
+                  </div>
+                </div>
+              </aside>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section id="complianceTab" class="tabPanel" role="tabpanel" aria-labelledby="tabBtnCompliance">
+        <div class="card">
+          <h2>Compliance Report</h2>
+          <div id="complianceSummary" class="summary"></div>
+          <table id="issuesTable">
+            <thead>
+              <tr>
+                <th>Severity</th><th>Category</th><th>Item</th><th>Reason</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" class="settingsDialog">
+    <form id="settingsForm" method="dialog" class="settingsDialogBody">
+      <div class="settingsHeader">
+        <h2>Settings</h2>
+        <button id="closeSettingsBtn" type="button">Close</button>
+      </div>
+      <div class="fieldStack">
+        <label class="fieldLabel" for="settingsThemeSelect">Theme</label>
+        <select id="settingsThemeSelect" title="Select theme">
+          <option value="naf">NAF Theme</option>
+          <option value="light">Light Theme</option>
+          <option value="dark">Dark Theme</option>
+        </select>
+      </div>
+      <div class="fieldStack">
+        <label class="fieldLabel" for="settingsBaselineSelect">Default Baseline (Open JSON Metamodel)</label>
+        <select id="settingsBaselineSelect" title="Select default baseline"></select>
+      </div>
+      <div class="fieldStack">
+        <label class="fieldLabel" for="settingsLineModeSelect">Default Line Mode Fallback</label>
+        <select id="settingsLineModeSelect" title="Select global line mode fallback">
+          <option value="straight">Straight</option>
+          <option value="curved">Curved</option>
+          <option value="ortho">Ortho</option>
+        </select>
+      </div>
+      <div class="settingsActions">
+        <button id="applySettingsBtn" type="button">Apply</button>
+      </div>
+    </form>
+  </dialog>
+  <datalist id="cssNamedColorList"></datalist>
+
+  <script src="scripts/core/DataModel.js"></script>
+  <script src="scripts/core/GuiManager.js"></script>
+  <script src="scripts/core/EventManager.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

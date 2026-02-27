@@ -1,0 +1,73 @@
+{
+  "name": "delta-model-architecture-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "main": "src-electron/main.cjs",
+  "description": "DeltaModel Architecture Assistant desktop wrappers (Tauri + Electron)",
+  "scripts": {
+    "tauri:dev": "cargo tauri dev",
+    "tauri:build": "cargo tauri build",
+    "electron:install": "npm install",
+    "electron:dev": "node src-electron/scripts/run-dev.cjs",
+    "electron:prod": "node src-electron/scripts/run-prod.cjs",
+    "prepare:frontend-dist": "sh ./src-tauri/scripts/prepare-frontend-dist.sh",
+    "electron:build": "npm run prepare:frontend-dist && electron-builder",
+    "electron:build:mac": "npm run prepare:frontend-dist && electron-builder --mac",
+    "electron:build:win": "npm run prepare:frontend-dist && electron-builder --win",
+    "electron:build:linux": "npm run prepare:frontend-dist && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "local.deltamodel.architecture.assistant.electron",
+    "productName": "DeltaModel Architecture Assistant",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "src-tauri/icons"
+    },
+    "files": [
+      "src-electron/**/*",
+      "frontend-dist/**/*",
+      "metaModels/**/*",
+      "src-tauri/icons/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "metaModels",
+        "to": "metaModels"
+      },
+      {
+        "from": "src-tauri/icons",
+        "to": "icons"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "icon": "src-tauri/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "icon": "src-tauri/icons/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "src-tauri/icons/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
+  }
+}

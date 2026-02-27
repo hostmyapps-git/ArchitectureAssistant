@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DeltaModel Architecture Assistant",
+  "version": "0.1.0",
+  "identifier": "local.deltamodel.architecture.assistant",
+  "build": {
+    "beforeDevCommand": "sh -c 'if [ -f ./src-tauri/scripts/start-dev-server.sh ]; then sh ./src-tauri/scripts/start-dev-server.sh; else sh ./scripts/start-dev-server.sh; fi'",
+    "devUrl": "http://127.0.0.1:1420/index.html",
+    "beforeBuildCommand": "sh -c 'if [ -f ./src-tauri/scripts/prepare-frontend-dist.sh ]; then sh ./src-tauri/scripts/prepare-frontend-dist.sh; else sh ./scripts/prepare-frontend-dist.sh; fi'",
+    "frontendDist": "../frontend-dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "DeltaModel Architecture Assistant",
+        "width": 1500,
+        "height": 980,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "../metaModels"
+    ]
+  }
+}
