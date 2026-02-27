@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
+  "author": {
+    "name": "DeltaModel Architecture Assistant Maintainers",
+    "email": "maintainers@deltamodel.local"
+  },
   "main": "src-electron/main.cjs",
   "description": "DeltaModel Architecture Assistant desktop wrappers (Tauri + Electron)",
   "scripts": {
@@ -15,7 +19,8 @@
     "electron:build": "npm run prepare:frontend-dist && electron-builder",
     "electron:build:mac": "npm run prepare:frontend-dist && electron-builder --mac",
     "electron:build:win": "npm run prepare:frontend-dist && electron-builder --win",
-    "electron:build:linux": "npm run prepare:frontend-dist && electron-builder --linux"
+    "electron:build:linux": "npm run prepare:frontend-dist && electron-builder --linux",
+    "release:electron": "bash ./scripts/release-electron.sh"
   },
   "devDependencies": {
     "electron": "^40.6.1",
@@ -63,6 +68,7 @@
     },
     "linux": {
       "icon": "src-tauri/icons/icon.png",
+      "maintainer": "DeltaModel Architecture Assistant Maintainers <maintainers@deltamodel.local>",
       "target": [
         "AppImage",
         "deb"

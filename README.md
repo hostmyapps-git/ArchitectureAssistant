@@ -1,4 +1,4 @@
-# DeltaModel Architecture Assistant (Draft)
+# DeltaModel Architecture Assistant 
 
 Vanilla HTML/CSS/JS prototype for creating architecture content with:
 - data-centric input (elements + relationships tables)
@@ -86,6 +86,29 @@ Notes:
 - Build output is written to `dist-electron/`.
 - The build step auto-prepares `frontend-dist/` before packaging.
 - Cross-platform packaging has OS constraints (e.g. macOS artifacts require macOS).
+
+### Electron GitHub Release Upload
+You can upload Electron artifacts from `dist-electron/` to a GitHub release using:
+
+```bash
+npm run release:electron -- v0.1.0 --build-all --draft
+```
+
+Interactive mode (recommended):
+
+```bash
+npm run release:electron
+```
+
+Notes:
+- Requires GitHub CLI `gh` and an authenticated session (`gh auth login`).
+- When passing script flags via npm, use `--`, for example:
+  - `npm run release:electron -- --build-all`
+- `--build-all` attempts `mac`, `win`, and `linux` builds, then uploads available artifacts.
+- If release tag already exists, assets are uploaded with overwrite (`--clobber`).
+- Without a tag, the script prompts for:
+  - current version overwrite, or
+  - new higher version (patch/minor/major/custom), then updates `package.json`, `package-lock.json`, and `src-tauri/Cargo.toml`.
 
 ## Compliance Behavior
 - The app auto-loads `metaModels/NAFv4-ADMBw-2025.10.meta.json` as baseline.
