@@ -2,7 +2,7 @@
 name = "delta_model_architecture_assistant"
 version = "0.1.0"
 description = "DeltaModel Architecture Assistant desktop wrapper"
-license = "AGPL-3.0-only"
+license = "MIT"
 edition = "2021"
 
 [build-dependencies]

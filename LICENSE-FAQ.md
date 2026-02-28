@@ -2,23 +2,20 @@
 
 ## What license is used?
 
-This project is licensed under **GNU AGPL v3.0 only** (`AGPL-3.0-only`).
+This project is licensed under the **MIT License**.
 
 ## Can I use it commercially?
 
-AGPL allows commercial use, but AGPL obligations apply.
-If you distribute modified versions, or provide modified versions over a network, you must provide corresponding source code under AGPL terms.
+Yes. MIT permits commercial use.
 
-## What does “network use” mean in AGPL?
+## Do I need to publish my changes?
 
-If users interact with a modified version of the software over a network, AGPL requires that those users can access the corresponding source code of that modified version.
+No. MIT does not require you to publish modifications.
 
-## Is there already a separate commercial license?
+## What must I keep when redistributing?
 
-Not yet. The project currently starts under AGPL.
-A separate commercial licensing option may be added later.
+Keep the copyright and license notice from `LICENSE`.
 
-## Is this legal advice?
+## Is there warranty or liability coverage?
 
-No. This file is practical guidance only.
-For legal interpretation, consult qualified counsel.
+No. The software is provided \"as is\", without warranty.

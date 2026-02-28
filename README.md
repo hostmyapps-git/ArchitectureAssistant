@@ -142,10 +142,6 @@ Relationships:
 - No external libraries are used.
 
 ## License
-- This project is licensed under **GNU AGPL v3.0 only** (`AGPL-3.0-only`).
+- This project is licensed under **MIT**.
 - See [LICENSE](LICENSE) for the license terms.
 - See [LICENSE-FAQ.md](LICENSE-FAQ.md) for practical guidance.
-
-## Future Commercial Licensing
-- The project currently starts under AGPL.
-- A separate commercial license can be introduced later.

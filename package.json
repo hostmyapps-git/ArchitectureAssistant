@@ -2,7 +2,7 @@
   "name": "delta-model-architecture-assistant",
   "version": "0.1.0",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "author": {
     "name": "DeltaModel Architecture Assistant Maintainers",
     "email": "maintainers@deltamodel.local"
