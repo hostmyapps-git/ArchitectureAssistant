@@ -15,10 +15,5 @@ src-tauri/target/
 # Generated frontend distribution
 frontend-dist/
 
-# Local app exports / working files
-deltaModelArchitectureDraft.json
-deltaModelArchitectureReport.html
-NAFv4-ADMBw_colored.meta.json
-
 # Optional local data folder contents
 data/
