@@ -160,6 +160,8 @@
         selectedEdgeIdReadonly: document.getElementById("selectedEdgeIdReadonly"),
         selectedEdgeTypeFilter: document.getElementById("selectedEdgeTypeFilter"),
         selectedEdgeType: document.getElementById("selectedEdgeType"),
+        selectedEdgeTypeStatus: document.getElementById("selectedEdgeTypeStatus"),
+        selectedEdgeValidityHelp: document.getElementById("selectedEdgeValidityHelp"),
         selectedEdgeDescription: document.getElementById("selectedEdgeDescription"),
         applySelectedEdgeBtn: document.getElementById("applySelectedEdgeBtn"),
         deleteSelectedEdgeBtn: document.getElementById("deleteSelectedEdgeBtn"),

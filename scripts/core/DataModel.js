@@ -16,6 +16,20 @@
       const ids = elements.map(function (element) {
         return element.id;
       });
+      const elementLayout = {};
+      elements.forEach(function (element) {
+        if (!element || !element.id) {
+          return;
+        }
+        const x = Number(element.x);
+        const y = Number(element.y);
+        if (Number.isFinite(x) || Number.isFinite(y)) {
+          elementLayout[element.id] = {
+            x: Number.isFinite(x) ? x : 0,
+            y: Number.isFinite(y) ? y : 0
+          };
+        }
+      });
       return {
         id: id,
         name: "Main Diagram",
@@ -24,6 +38,7 @@
         type: "standard",
         lineMode: null,
         elementIds: ids,
+        elementLayout: elementLayout,
         focusElementId: ids[0] || null,
         depth: 1
       };
@@ -41,6 +56,45 @@
         normalizedModel.diagrams = normalizedModel.diagrams.map(function (diagram, index) {
           const fallbackId = "dia_" + Math.random().toString(36).slice(2, 9);
           const ids = Array.isArray(diagram.elementIds) ? diagram.elementIds : [];
+          const rawLayout = (diagram && typeof diagram.elementLayout === "object" && diagram.elementLayout)
+            ? diagram.elementLayout
+            : {};
+          const elementLayout = {};
+          Object.keys(rawLayout).forEach(function (elementId) {
+            if (ids.indexOf(elementId) < 0) {
+              return;
+            }
+            const point = rawLayout[elementId] || {};
+            const x = Number(point.x);
+            const y = Number(point.y);
+            if (!Number.isFinite(x) && !Number.isFinite(y)) {
+              return;
+            }
+            elementLayout[elementId] = {
+              x: Number.isFinite(x) ? x : 0,
+              y: Number.isFinite(y) ? y : 0
+            };
+          });
+          ids.forEach(function (elementId) {
+            if (elementLayout[elementId]) {
+              return;
+            }
+            const sourceElement = (normalizedModel.elements || []).find(function (entry) {
+              return entry && entry.id === elementId;
+            });
+            if (!sourceElement) {
+              return;
+            }
+            const x = Number(sourceElement.x);
+            const y = Number(sourceElement.y);
+            if (!Number.isFinite(x) && !Number.isFinite(y)) {
+              return;
+            }
+            elementLayout[elementId] = {
+              x: Number.isFinite(x) ? x : 0,
+              y: Number.isFinite(y) ? y : 0
+            };
+          });
           return {
             id: diagram.id || fallbackId,
             name: diagram.name || "Diagram " + (index + 1),
@@ -49,6 +103,7 @@
             type: diagram.type === "clickable" ? "clickable" : "standard",
             lineMode: ["straight", "curved", "ortho"].includes(diagram.lineMode) ? diagram.lineMode : null,
             elementIds: ids,
+            elementLayout: elementLayout,
             focusElementId: diagram.focusElementId || null,
             depth: Number.isFinite(diagram.depth) && diagram.depth >= 1 ? Math.floor(diagram.depth) : 1
           };
@@ -156,7 +211,7 @@
       normalized.ui.sidebarViewFilterCollapsed = !!normalized.ui.sidebarViewFilterCollapsed;
       normalized.ui.sidebarStatsCollapsed = !!normalized.ui.sidebarStatsCollapsed;
       normalized.ui.sidebarColorsCollapsed = !!normalized.ui.sidebarColorsCollapsed;
-      normalized.ui.theme = ["naf", "light", "dark"].includes(normalized.ui.theme) ? normalized.ui.theme : "naf";
+      normalized.ui.theme = ["naf", "light", "dark"].includes(normalized.ui.theme) ? normalized.ui.theme : "dark";
       normalized.ui.selectionDrawerOpen = !!normalized.ui.selectionDrawerOpen;
       normalized.ui.selectedNodeId = normalized.ui.selectedNodeId || null;
       normalized.ui.selectedNodeIds = Array.isArray(normalized.ui.selectedNodeIds)
@@ -186,8 +241,56 @@
       }
     }
 
+    compactBaselineForPersist(baseline) {
+      const source = baseline || {};
+      const architecture = source.architecture || { views: [], categories: [], nodeTypes: [], edgeTypes: [] };
+      return {
+        source: source.source || "",
+        name: source.name || "",
+        version: source.version || "",
+        format: source.format || "architectureMetaModel",
+        schemaVersion: source.schemaVersion || 2,
+        metaModelId: source.metaModelId || "",
+        fileName: source.fileName || "",
+        isLoaded: !!source.isLoaded,
+        isDefaultMetaModel: !!source.isDefaultMetaModel,
+        loadedCategoryColors: deepClone(source.loadedCategoryColors || {}),
+        architecture: deepClone(architecture)
+      };
+    }
+
+    buildPersistableState() {
+      const state = deepClone(this.state || {});
+      state.baseline = this.compactBaselineForPersist(state.baseline);
+      const architectures = Array.isArray(state.architectures) ? state.architectures : [];
+      const activeArchitectureId = (state.ui && state.ui.activeArchitectureId) || "";
+      const activeArchitecture = architectures.find((entry) => {
+        return entry && entry.id === activeArchitectureId;
+      }) || architectures[0] || null;
+      state.architectures = activeArchitecture
+        ? [{
+            ...activeArchitecture,
+            baseline: this.compactBaselineForPersist(activeArchitecture.baseline),
+            model: this.normalizeModel(deepClone(activeArchitecture.model || {}))
+          }]
+        : [];
+      if (state.ui) {
+        state.ui.activeArchitectureId = activeArchitecture ? activeArchitecture.id : "";
+      }
+      return state;
+    }
+
     persist() {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.state));
+      const persistableState = this.buildPersistableState();
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(persistableState));
+      } catch (error) {
+        if (error && (error.name === "QuotaExceededError" || String(error).includes("quota"))) {
+          console.warn("[storage] State exceeds localStorage quota. Keeping session in memory only.");
+          return;
+        }
+        throw error;
+      }
     }
 
     subscribe(listener) {
@@ -213,6 +316,12 @@
       return (this.state.architectures || []).map(function (entry) {
         return { id: entry.id, name: entry.name };
       });
+    }
+
+    setState(nextState) {
+      const candidate = deepClone(nextState || {});
+      this.state = this.normalizeState({ ...deepClone(this.defaultState), ...candidate });
+      this.notify();
     }
 
     resetModel(model) {
@@ -309,7 +418,9 @@
           return id !== elementId;
         });
         const nextFocus = diagram.focusElementId === elementId ? (nextIds[0] || null) : diagram.focusElementId;
-        return { ...diagram, elementIds: nextIds, focusElementId: nextFocus };
+        const nextLayout = { ...(diagram.elementLayout || {}) };
+        delete nextLayout[elementId];
+        return { ...diagram, elementIds: nextIds, elementLayout: nextLayout, focusElementId: nextFocus };
       });
       this.notify();
     }

@@ -487,8 +487,12 @@
                   </div>
                   <div id="selectedEdgeEditor" class="formGrid" hidden>
                     <input id="selectedEdgeIdReadonly" placeholder="Edge ID" readonly>
-                    <input id="selectedEdgeType" list="selectedEdgeTypeList" placeholder="Edge stereotype/type" title="Edge stereotype/type">
+                    <div class="fieldWithBadge">
+                      <input id="selectedEdgeType" list="selectedEdgeTypeList" placeholder="Edge stereotype/type" title="Edge stereotype/type">
+                      <span id="selectedEdgeTypeStatus" class="deviationBadge">Select</span>
+                    </div>
                     <datalist id="selectedEdgeTypeList"></datalist>
+                    <p id="selectedEdgeValidityHelp" class="hint"></p>
                     <textarea id="selectedEdgeDescription" class="longTextInput" rows="5" placeholder="Edge description"></textarea>
                     <button id="applySelectedEdgeBtn" type="button">Apply Edge Changes</button>
                     <button id="deleteSelectedEdgeBtn" type="button">Delete Edge</button>
@@ -526,9 +530,9 @@
       <div class="fieldStack">
         <label class="fieldLabel" for="settingsThemeSelect">Theme</label>
         <select id="settingsThemeSelect" title="Select theme">
-          <option value="naf">NAF Theme</option>
-          <option value="light">Light Theme</option>
           <option value="dark">Dark Theme</option>
+          <option value="light">Light Theme</option>
+          <option value="naf">NAF Theme</option>
         </select>
       </div>
       <div class="fieldStack">

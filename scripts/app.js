@@ -48,7 +48,7 @@
       sidebarColorsCollapsed: false,
       sidebarCollapsed: false,
       sidebarWidth: null,
-      theme: "naf",
+      theme: "dark",
       defaultBaselineFile: defaultBundledMetaModelFileName,
       activeDiagramId: null,
       selectionDrawerOpen: false,
@@ -206,6 +206,7 @@
   });
 
   const getState = dataModel.getState.bind(dataModel);
+  const setState = dataModel.setState.bind(dataModel);
   const resetModel = dataModel.resetModel.bind(dataModel);
   const setBaseline = dataModel.setBaseline.bind(dataModel);
   const setUi = dataModel.setUi.bind(dataModel);
@@ -1435,6 +1436,8 @@
     this.drag = null;
     this.controlDrag = null;
     this.panDrag = null;
+    this.lastNodePointerDown = null;
+    this.lastEdgePointerDown = null;
     this.installDefs();
     this.installPointerHandlers();
   }
@@ -1641,6 +1644,7 @@
     const selectedNodeIds = new Set(Array.isArray(payload.selectedNodeIds) ? payload.selectedNodeIds : []);
     const selectedEdgeId = payload.selectedEdgeId || null;
     const edgeTypeById = payload.edgeTypeById || new Map();
+    const relationshipResultById = payload.relationshipResultById || new Map();
     const nodeTypeById = payload.nodeTypeById || new Map();
 
     const map = new Map(
@@ -1691,23 +1695,29 @@
       }
       const sourceMetrics = metricsByElementId.get(source.id);
       const targetMetrics = metricsByElementId.get(target.id);
+      const complianceEntry = relationshipResultById.get(relationship.id) || null;
+      const isRelationshipDeviation = !!(complianceEntry && complianceEntry.isDeviation);
+      const isAcceptedDeviation = isRelationshipDeviation && !!relationship.allowDeviation;
+      const isOpenDeviation = isRelationshipDeviation && !relationship.allowDeviation;
       const edgeRule =
         edgeTypeById.get(relationship.type) ||
         edgeTypeById.get(String(relationship.type || "").toLowerCase()) ||
         null;
       const connectorStyle = getConnectorStyle(relationship.type, edgeRule);
       const geometry = getConnectorGeometry(lineMode, relationship, source, target, sourceMetrics, targetMetrics);
-      const line = createSvgElement("path", {
-        d: geometry.pathData,
-        stroke: relationship.id === selectedEdgeId ? "#3f51b5" : relationship.allowDeviation ? "#ad3f2f" : "#735e4f",
-        "stroke-width": relationship.id === selectedEdgeId ? 2.6 : 1.6,
-        "marker-end": "url(#" + connectorStyle.marker + ")",
-        "stroke-dasharray": connectorStyle.dashArray,
-        fill: "none",
-        cursor: "pointer"
-      });
-      line.setAttribute("stroke-opacity", "0.95");
-      line.addEventListener("dblclick", function (event) {
+      const isEdgeDoublePointerDown = function (relationshipId) {
+        const pointerTime = Date.now();
+        const lastEdgePointerDown = self.lastEdgePointerDown;
+        const isDoublePointerDown = !!lastEdgePointerDown &&
+          lastEdgePointerDown.relationshipId === relationshipId &&
+          pointerTime - lastEdgePointerDown.time <= 420;
+        self.lastEdgePointerDown = {
+          relationshipId: relationshipId,
+          time: pointerTime
+        };
+        return isDoublePointerDown;
+      };
+      const openEdgeSelectionEditor = function (event) {
         if (self.connectMode) {
           return;
         }
@@ -1716,6 +1726,27 @@
         if (typeof self.onEdgeSelected === "function") {
           self.onEdgeSelected(relationship.id);
         }
+      };
+      const line = createSvgElement("path", {
+        d: geometry.pathData,
+        stroke: relationship.id === selectedEdgeId
+          ? "#3f51b5"
+          : (isOpenDeviation ? "#ad3f2f" : (isAcceptedDeviation ? "#aa7a2d" : "#735e4f")),
+        "stroke-width": relationship.id === selectedEdgeId ? 2.6 : 1.6,
+        "marker-end": "url(#" + connectorStyle.marker + ")",
+        "stroke-dasharray": connectorStyle.dashArray,
+        fill: "none",
+        cursor: "pointer"
+      });
+      line.setAttribute("stroke-opacity", "0.95");
+      line.addEventListener("dblclick", function (event) {
+        openEdgeSelectionEditor(event);
+      });
+      line.addEventListener("pointerdown", function (event) {
+        if (!isEdgeDoublePointerDown(relationship.id)) {
+          return;
+        }
+        openEdgeSelectionEditor(event);
       });
       edgeGroup.appendChild(line);
 
@@ -1735,20 +1766,23 @@
         height: 14,
         rx: 3,
         ry: 3,
-        fill: relationship.id === selectedEdgeId ? "#ecefff" : "#fffdf8",
-        stroke: relationship.id === selectedEdgeId ? "#3f51b5" : "#c8bbaa",
+        fill: relationship.id === selectedEdgeId
+          ? "#ecefff"
+          : (isOpenDeviation ? "#fbe7e4" : (isAcceptedDeviation ? "#fff1d9" : "#fffdf8")),
+        stroke: relationship.id === selectedEdgeId
+          ? "#3f51b5"
+          : (isOpenDeviation ? "#d1887f" : (isAcceptedDeviation ? "#dbb173" : "#c8bbaa")),
         "stroke-width": relationship.id === selectedEdgeId ? 1.1 : 0.8,
         cursor: "pointer"
       });
       labelBg.addEventListener("dblclick", function (event) {
-        if (self.connectMode) {
+        openEdgeSelectionEditor(event);
+      });
+      labelBg.addEventListener("pointerdown", function (event) {
+        if (!isEdgeDoublePointerDown(relationship.id)) {
           return;
         }
-        event.stopPropagation();
-        event.preventDefault();
-        if (typeof self.onEdgeSelected === "function") {
-          self.onEdgeSelected(relationship.id);
-        }
+        openEdgeSelectionEditor(event);
       });
       edgeGroup.appendChild(labelBg);
 
@@ -1757,19 +1791,20 @@
         y: labelY,
         "text-anchor": "middle",
         "font-size": 10,
-        fill: "#51483f",
+        fill: relationship.id === selectedEdgeId
+          ? "#3f51b5"
+          : (isOpenDeviation ? "#8f3a2e" : (isAcceptedDeviation ? "#8a5a16" : "#51483f")),
         cursor: "pointer"
       });
       label.textContent = labelText;
       label.addEventListener("dblclick", function (event) {
-        if (self.connectMode) {
+        openEdgeSelectionEditor(event);
+      });
+      label.addEventListener("pointerdown", function (event) {
+        if (!isEdgeDoublePointerDown(relationship.id)) {
           return;
         }
-        event.stopPropagation();
-        event.preventDefault();
-        if (typeof self.onEdgeSelected === "function") {
-          self.onEdgeSelected(relationship.id);
-        }
+        openEdgeSelectionEditor(event);
       });
       edgeGroup.appendChild(label);
 
@@ -1963,6 +1998,7 @@
       }
 
       node.addEventListener("pointerdown", function (event) {
+        const pointerTime = Date.now();
         if (self.connectMode) {
           if (!self.pendingSourceId) {
             self.pendingSourceId = element.id;
@@ -1978,7 +2014,16 @@
           return;
         }
 
-        if (event.detail >= 2) {
+        const lastNodePointerDown = self.lastNodePointerDown;
+        const isDoublePointerDown = !!lastNodePointerDown &&
+          lastNodePointerDown.elementId === element.id &&
+          pointerTime - lastNodePointerDown.time <= 360;
+        self.lastNodePointerDown = {
+          elementId: element.id,
+          time: pointerTime
+        };
+
+        if (isDoublePointerDown) {
           if (typeof self.onNodeSelected === "function") {
             self.onNodeSelected(element.id);
           }
@@ -2925,7 +2970,9 @@
     const viewpointFilter = currentState.ui.viewpointFilter || "All";
     const diagramIds = Array.isArray(activeDiagram.elementIds) ? activeDiagram.elementIds : [];
 
-    const selectedElements = (currentState.model.elements || []).filter(function (entry) {
+    const diagramElements = applyDiagramLayoutToElements(currentState.model.elements || [], activeDiagram);
+
+    const selectedElements = diagramElements.filter(function (entry) {
       if (activeDiagram.type === "standard" && diagramIds.indexOf(entry.id) < 0) {
         return false;
       }
@@ -2973,7 +3020,7 @@
     const visibleWidth = 1200 / (zoom / 100);
     const visibleHeight = 700 / (zoom / 100);
 
-    const allVisibleElements = (currentState.model.elements || []).filter(function (entry) {
+    const allVisibleElements = diagramElements.filter(function (entry) {
       if (activeDiagram.type === "standard" && diagramIds.indexOf(entry.id) < 0) {
         return false;
       }
@@ -3009,13 +3056,18 @@
   const diagram = new Diagram(
     dom.diagramSvg,
     function (elementId, x, y) {
-      const current = getState().model.elements.find(function (entry) {
-        return entry.id === elementId;
-      });
-      if (!current) {
+      const currentState = getState();
+      const activeDiagram = getActiveDiagram(currentState);
+      if (!activeDiagram || activeDiagram.type !== "standard") {
         return;
       }
-      upsertElement({ ...current, x: x, y: y });
+      upsertDiagram({
+        ...activeDiagram,
+        elementLayout: {
+          ...(activeDiagram.elementLayout || {}),
+          [elementId]: { x: x, y: y }
+        }
+      });
     },
     function (sourceId, targetId) {
       const baseline = getEffectiveBaseline(getState().baseline);
@@ -3122,12 +3174,28 @@
   }
 
   function buildExportPayload(currentState) {
+    const safeState = currentState || defaultState;
+    const architectures = Array.isArray(safeState.architectures) ? safeState.architectures : [];
+    const activeArchitectureId = (safeState.ui && safeState.ui.activeArchitectureId) || "";
+    const activeArchitecture = architectures.find(function (entry) {
+      return entry && entry.id === activeArchitectureId;
+    }) || architectures[0] || null;
+    const exportArchitecture = activeArchitecture
+      ? {
+          id: activeArchitecture.id || "",
+          name: activeArchitecture.name || "",
+          model: clone((activeArchitecture && activeArchitecture.model) || { elements: [], relationships: [], diagrams: [] })
+        }
+      : {
+          id: "arch_main",
+          name: "Main Architecture",
+          model: clone(safeState.model || { elements: [], relationships: [], diagrams: [] })
+        };
     return {
-      format: "deltaModelAssistantExport",
-      version: 1,
+      format: "deltaModelArchitectureExport",
+      version: 4,
       exportedAt: new Date().toISOString(),
-      baseline: currentState.baseline,
-      model: currentState.model
+      architecture: exportArchitecture
     };
   }
 
@@ -3253,14 +3321,20 @@
     return "solid";
   }
 
-  function buildDiagramPreviewSvg(diagram, allElements, allRelationships, elementById, colorScheme, edgeTypeById, cssClassName) {
+  function buildDiagramPreviewSvg(diagram, allElements, allRelationships, colorScheme, edgeTypeById, cssClassName) {
     const idSet = new Set(Array.isArray(diagram.elementIds) ? diagram.elementIds : []);
-    const elements = allElements.filter(function (entry) {
+    const positionedElements = applyDiagramLayoutToElements(allElements, diagram);
+    const elements = positionedElements.filter(function (entry) {
       return idSet.has(entry.id);
     });
     if (!elements.length) {
       return '<div class="muted">No elements assigned to this diagram.</div>';
     }
+    const elementById = new Map(
+      elements.map(function (entry) {
+        return [entry.id, entry];
+      })
+    );
     const relationships = allRelationships.filter(function (entry) {
       return idSet.has(entry.sourceId) && idSet.has(entry.targetId);
     });
@@ -3442,7 +3516,7 @@
         '<div class="card"><strong>Focus</strong><div class="muted">' + escapeHtml((focus && focus.name) || entry.focusElementId || "-") + "</div></div>" +
         '<div class="card"><strong>Elements / Relations</strong><div class="muted">' + String(idSet.size) + " / " + String(relationshipCount) + "</div></div>" +
         "</div>" +
-        buildDiagramPreviewSvg(entry, elements, relationships, elementById, effectiveColorScheme, edgeTypeById, "diagramPreviewSvg") +
+        buildDiagramPreviewSvg(entry, elements, relationships, effectiveColorScheme, edgeTypeById, "diagramPreviewSvg") +
         "</article>"
       );
     }).join("");
@@ -3499,16 +3573,10 @@
     }
     const elements = Array.isArray(currentState.model.elements) ? currentState.model.elements : [];
     const relationships = Array.isArray(currentState.model.relationships) ? currentState.model.relationships : [];
-    const elementById = new Map(
-      elements.map(function (entry) {
-        return [entry.id, entry];
-      })
-    );
     const svgText = buildDiagramPreviewSvg(
       diagram,
       elements,
       relationships,
-      elementById,
       effectiveColorScheme,
       edgeTypeById,
       "diagramExportSvg"
@@ -3613,6 +3681,50 @@
   }
 
   function parseImportPayload(rawPayload) {
+    if (
+      rawPayload &&
+      rawPayload.format === "deltaModelArchitectureExport" &&
+      rawPayload.architecture &&
+      rawPayload.architecture.model &&
+      Array.isArray(rawPayload.architecture.model.elements)
+    ) {
+      return {
+        architecturesOnly: {
+          activeArchitectureId: String((rawPayload.architecture && rawPayload.architecture.id) || "").trim(),
+          architectures: [rawPayload.architecture]
+        }
+      };
+    }
+
+    if (
+      rawPayload &&
+      rawPayload.format === "deltaModelArchitectureExport" &&
+      Array.isArray(rawPayload.architectures)
+    ) {
+      const activeArchitectureId = String(rawPayload.activeArchitectureId || "").trim();
+      const selectedArchitecture = rawPayload.architectures.find(function (entry) {
+        return entry && entry.id === activeArchitectureId;
+      }) || rawPayload.architectures[0] || null;
+      if (!selectedArchitecture || !selectedArchitecture.model || !Array.isArray(selectedArchitecture.model.elements)) {
+        throw new Error("No valid architecture payload found");
+      }
+      return {
+        architecturesOnly: {
+          activeArchitectureId: String((selectedArchitecture && selectedArchitecture.id) || "").trim(),
+          architectures: [selectedArchitecture]
+        }
+      };
+    }
+
+    if (
+      rawPayload &&
+      rawPayload.format === "deltaModelAssistantExport" &&
+      rawPayload.state &&
+      typeof rawPayload.state === "object"
+    ) {
+      return { state: rawPayload.state };
+    }
+
     if (rawPayload && Array.isArray(rawPayload.elements) && Array.isArray(rawPayload.relationships)) {
       return { model: rawPayload };
     }
@@ -3639,9 +3751,17 @@
         Array.isArray(selectedArchitecture.model.elements)
       ) {
         return {
-          baseline: selectedArchitecture.baseline || rawPayload.baseline || null,
-          colorScheme: rawPayload.colorScheme || null,
-          model: selectedArchitecture.model
+          state: {
+            ...clone(defaultState),
+            ...clone(rawPayload),
+            baseline: clone(selectedArchitecture.baseline || rawPayload.baseline || defaultState.baseline),
+            model: clone(selectedArchitecture.model || defaultState.model),
+            ui: {
+              ...clone(defaultState.ui),
+              ...(rawPayload.ui || {}),
+              activeArchitectureId: selectedArchitecture.id
+            }
+          }
         };
       }
     }
@@ -3649,6 +3769,45 @@
   }
 
   function applyImportedPayload(parsed) {
+    if (parsed && parsed.architecturesOnly) {
+      const current = getState();
+      const sourceArchitectures = Array.isArray(parsed.architecturesOnly.architectures)
+        ? parsed.architecturesOnly.architectures
+        : [];
+      const sanitizedArchitectures = sourceArchitectures
+        .filter(function (entry) {
+          return entry && entry.model && Array.isArray(entry.model.elements);
+        })
+        .map(function (entry, index) {
+          return {
+            id: String((entry && entry.id) || "").trim() || ("arch_" + Math.random().toString(36).slice(2, 9)),
+            name: String((entry && entry.name) || "").trim() || ("Architecture " + (index + 1)),
+            baseline: clone(current.baseline || defaultState.baseline),
+            model: clone(entry.model || { elements: [], relationships: [], diagrams: [] })
+          };
+        });
+      if (!sanitizedArchitectures.length) {
+        throw new Error("No valid architectures found in import file");
+      }
+      const activeArchitecture = sanitizedArchitectures[0];
+      const activeArchitectureId = activeArchitecture.id;
+      setState({
+        ...clone(current),
+        baseline: clone(current.baseline || defaultState.baseline),
+        model: clone(activeArchitecture.model),
+        architectures: [activeArchitecture],
+        ui: {
+          ...(current.ui || {}),
+          activeArchitectureId: activeArchitectureId
+        }
+      });
+      return;
+    }
+
+    if (parsed && parsed.state) {
+      setState(parsed.state);
+      return;
+    }
     if (parsed.baseline) {
       try {
         setBaseline(parsed.baseline);
@@ -3855,7 +4014,17 @@
       if (!jsonText) {
         return;
       }
-      const parsed = parseImportPayload(JSON.parse(jsonText));
+      const trimmed = String(jsonText || "").trim();
+      if (!trimmed) {
+        throw new Error("Selected file is empty");
+      }
+      let parsedJson;
+      try {
+        parsedJson = JSON.parse(trimmed);
+      } catch (_error) {
+        throw new Error("Selected file is not valid JSON");
+      }
+      const parsed = parseImportPayload(parsedJson);
       applyImportedPayload(parsed);
       setBaselineLoadStatus("Architecture JSON imported");
     } catch (error) {
@@ -4146,6 +4315,34 @@
     return new Set();
   }
 
+  function getDiagramElementPosition(diagram, element) {
+    if (!diagram || !element) {
+      return { x: Number((element && element.x) || 0) || 0, y: Number((element && element.y) || 0) || 0 };
+    }
+    const layout = (diagram.elementLayout && diagram.elementLayout[element.id]) || null;
+    if (layout && (Number.isFinite(Number(layout.x)) || Number.isFinite(Number(layout.y)))) {
+      return {
+        x: Number.isFinite(Number(layout.x)) ? Number(layout.x) : 0,
+        y: Number.isFinite(Number(layout.y)) ? Number(layout.y) : 0
+      };
+    }
+    return {
+      x: Number.isFinite(Number(element.x)) ? Number(element.x) : 0,
+      y: Number.isFinite(Number(element.y)) ? Number(element.y) : 0
+    };
+  }
+
+  function applyDiagramLayoutToElements(elements, diagram) {
+    return (elements || []).map(function (element) {
+      const position = getDiagramElementPosition(diagram, element);
+      return {
+        ...element,
+        x: position.x,
+        y: position.y
+      };
+    });
+  }
+
   function resetDiagramLayoutToDefault(currentState, diagram) {
     const visibleIds = getVisibleElementIdsForDiagram(currentState, diagram);
     const relationships = Array.isArray(currentState.model.relationships) ? currentState.model.relationships : [];
@@ -4193,6 +4390,55 @@
     };
     upsertElement(entry);
     return entry;
+  }
+
+  function getCurrentDiagramViewBox(svgNode) {
+    if (svgNode && svgNode.viewBox && svgNode.viewBox.baseVal && svgNode.viewBox.baseVal.width > 0) {
+      return {
+        x: Number(svgNode.viewBox.baseVal.x) || 0,
+        y: Number(svgNode.viewBox.baseVal.y) || 0,
+        width: Number(svgNode.viewBox.baseVal.width) || 1200,
+        height: Number(svgNode.viewBox.baseVal.height) || 700
+      };
+    }
+    return { x: 0, y: 0, width: 1200, height: 700 };
+  }
+
+  function isElementVisibleInViewBox(element, viewBox) {
+    if (!element) {
+      return false;
+    }
+    const metrics = getNodeMetrics(element);
+    const margin = 8;
+    const left = Number(element.x) || 0;
+    const top = Number(element.y) || 0;
+    const right = left + metrics.width;
+    const bottom = top + metrics.height;
+    const visibleLeft = viewBox.x + margin;
+    const visibleTop = viewBox.y + margin;
+    const visibleRight = viewBox.x + viewBox.width - margin;
+    const visibleBottom = viewBox.y + viewBox.height - margin;
+    return right >= visibleLeft && left <= visibleRight && bottom >= visibleTop && top <= visibleBottom;
+  }
+
+  function computeVisiblePlacementForNode(viewBox, nodeMetrics, index) {
+    const safeMetrics = nodeMetrics || { width: 180, height: 80 };
+    const margin = 20;
+    const maxX = viewBox.x + viewBox.width - safeMetrics.width - margin;
+    const maxY = viewBox.y + viewBox.height - safeMetrics.height - margin;
+    const minX = viewBox.x + margin;
+    const minY = viewBox.y + margin;
+    const columns = 4;
+    const col = (index || 0) % columns;
+    const row = Math.floor((index || 0) / columns);
+    const xOffset = (col - 1.5) * 28;
+    const yOffset = (row - 0.5) * 24;
+    const centerX = viewBox.x + viewBox.width / 2 - safeMetrics.width / 2 + xOffset;
+    const centerY = viewBox.y + viewBox.height / 2 - safeMetrics.height / 2 + yOffset;
+    return {
+      x: clamp(centerX, minX, Math.max(minX, maxX)),
+      y: clamp(centerY, minY, Math.max(minY, maxY))
+    };
   }
 
   function enterElementEditMode(elementId) {
@@ -4550,6 +4796,94 @@
     }
   }
 
+  function updateSelectedEdgeControls(currentState, effectiveBaseline, nodeTypeById, edgeTypeById, edgeTypeOptions, selectedEdge) {
+    if (!selectedEdge) {
+      setValidityBadge(dom.selectedEdgeTypeStatus, "none", "Select");
+      if (dom.selectedEdgeValidityHelp) {
+        dom.selectedEdgeValidityHelp.textContent = "";
+      }
+      return;
+    }
+
+    const edgeRules = ((effectiveBaseline.architecture && effectiveBaseline.architecture.edgeTypes) || []);
+    const edgeRuleById = new Map();
+    edgeRules.forEach(function (rule) {
+      if (!rule || !rule.id) {
+        return;
+      }
+      edgeRuleById.set(normalizeTypeToken(rule.id), rule);
+    });
+
+    const selectedSource = (currentState.model.elements || []).find(function (entry) {
+      return entry.id === selectedEdge.sourceId;
+    }) || null;
+    const selectedTarget = (currentState.model.elements || []).find(function (entry) {
+      return entry.id === selectedEdge.targetId;
+    }) || null;
+    const selectedType = String(dom.selectedEdgeType.value || selectedEdge.type || "").trim();
+    const selectedRule = edgeRuleById.get(normalizeTypeToken(selectedType)) || null;
+
+    const validEdgeTypes = edgeTypeOptions.filter(function (typeId) {
+      const rule = edgeRuleById.get(normalizeTypeToken(typeId)) || null;
+      return isEdgeTypeValidForNodeSelection(rule, selectedSource, selectedTarget);
+    });
+    const validEdgeTypeSet = new Set(validEdgeTypes.map(function (typeId) {
+      return normalizeTypeToken(typeId);
+    }));
+
+    setInputDatalistEntries(
+      dom.selectedEdgeType,
+      edgeTypeOptions.map(function (typeId) {
+        const key = String(typeId || "").trim();
+        const typeEntry = (edgeTypeById && (edgeTypeById.get(key) || edgeTypeById.get(key.toLowerCase()))) || null;
+        const isValid = validEdgeTypeSet.has(normalizeTypeToken(typeId));
+        return {
+          value: key,
+          label: (typeEntry && typeEntry.label) || key,
+          status: isValid ? "ok" : "warn"
+        };
+      })
+    );
+
+    const selectedTypeIsKnown = !!selectedType && edgeTypeOptions.some(function (entry) {
+      return normalizeTypeToken(entry) === normalizeTypeToken(selectedType);
+    });
+    const selectedTypeIsValid = selectedTypeIsKnown && validEdgeTypeSet.has(normalizeTypeToken(selectedType));
+    setValidityBadge(
+      dom.selectedEdgeTypeStatus,
+      !selectedType ? "none" : (selectedTypeIsValid ? "ok" : "warn"),
+      !selectedType ? "Select" : (selectedTypeIsValid ? "Compliant" : "Deviation")
+    );
+
+    if (dom.selectedEdgeValidityHelp) {
+      const validTypePreview = validEdgeTypes
+        .slice(0, 8)
+        .map(function (typeId) {
+          const entry = (edgeTypeById && (edgeTypeById.get(typeId) || edgeTypeById.get(String(typeId).toLowerCase()))) || null;
+          return (entry && entry.label) || typeId;
+        })
+        .join(", ");
+      const validTypeText = validEdgeTypes.length
+        ? validTypePreview + (validEdgeTypes.length > 8 ? " ..." : "")
+        : "none";
+      const sourceTypeText = selectedRule
+        ? describeAllowedNodeTypes(selectedRule.sourceNodeTypes, nodeTypeById)
+        : "all node types (no relationship type selected)";
+      const targetTypeText = selectedRule
+        ? describeAllowedNodeTypes(selectedRule.targetNodeTypes, nodeTypeById)
+        : "all node types (no relationship type selected)";
+      dom.selectedEdgeValidityHelp.textContent =
+        "Valid relationship types are metamodel-compliant edge types for this edge source/target. " +
+        "Currently valid relationship types: " +
+        validTypeText +
+        ". Valid source node types: " +
+        sourceTypeText +
+        ". Valid target node types: " +
+        targetTypeText +
+        ".";
+    }
+  }
+
   function render() {
     const currentState = getState();
     const effectiveBaseline = getEffectiveBaseline(currentState.baseline);
@@ -4559,7 +4893,7 @@
     const activeArchitecture = architectureEntries.find(function (entry) {
       return entry.id === activeArchitectureId;
     }) || architectureEntries[0] || null;
-    document.body.dataset.theme = (currentState.ui && currentState.ui.theme) || "naf";
+    document.body.dataset.theme = (currentState.ui && currentState.ui.theme) || "dark";
     const activeDiagram = getActiveDiagram(currentState);
     const globalLineModeFallback = normalizeLineMode(currentState.ui.lineMode || "straight");
     const effectiveLineMode = normalizeLineMode(
@@ -4586,7 +4920,7 @@
       "<div>edge types: " + (effectiveBaseline.edgeTypes || []).length + "</div>"
     ].join("");
     if (dom.settingsThemeSelect) {
-      dom.settingsThemeSelect.value = (currentState.ui && currentState.ui.theme) || "naf";
+      dom.settingsThemeSelect.value = (currentState.ui && currentState.ui.theme) || "dark";
     }
     renderMetaModelEditor(currentState, effectiveBaseline);
 
@@ -5302,9 +5636,10 @@
           : null;
 
     const effectiveDiagramViewpointFilter = currentState.ui.viewpointFilter || "All";
+    const diagramElements = applyDiagramLayoutToElements(currentState.model.elements || [], activeDiagram);
 
     const diagramRenderResult = diagram.render({
-      elements: currentState.model.elements,
+      elements: diagramElements,
       relationships: currentState.model.relationships,
       viewpointFilter: effectiveDiagramViewpointFilter,
       lineMode: effectiveLineMode,
@@ -5313,6 +5648,7 @@
       diagramType: activeDiagram ? activeDiagram.type : "standard",
       clickableMetaById: clickableScope ? clickableScope.metaById : new Map(),
       edgeTypeById: edgeTypeById,
+      relationshipResultById: relationshipResultById,
       nodeTypeById: nodeTypeById,
       focusElementId: activeDiagram && activeDiagram.type === "clickable" ? activeDiagram.focusElementId : null,
       selectedNodeId: currentState.ui.selectedNodeId || null,
@@ -5379,7 +5715,10 @@
         dom.selectedEdgeIdReadonly.value = selectedEdge.id || "";
       }
       assignSelectValue(dom.selectedEdgeType, selectedEdge.type || "");
+      updateSelectedEdgeControls(currentState, effectiveBaseline, nodeTypeById, edgeTypeById, edgeTypeOptions, selectedEdge);
       dom.selectedEdgeDescription.value = selectedEdge.description || "";
+    } else {
+      updateSelectedEdgeControls(currentState, effectiveBaseline, nodeTypeById, edgeTypeById, edgeTypeOptions, null);
     }
 
     dom.tabBtns.forEach(function (button) {
@@ -5575,6 +5914,12 @@
       render();
     });
     on(dom.relTypeFilter, "input", function () {
+      render();
+    });
+    on(dom.selectedEdgeType, "input", function () {
+      render();
+    });
+    on(dom.selectedEdgeType, "change", function () {
       render();
     });
 
@@ -5976,7 +6321,13 @@
           ...activeDiagram,
           elementIds: activeDiagram.elementIds.filter(function (id) {
             return id !== selectedNodeId;
-          })
+          }),
+          elementLayout: Object.keys(activeDiagram.elementLayout || {}).reduce(function (acc, key) {
+            if (key !== selectedNodeId) {
+              acc[key] = activeDiagram.elementLayout[key];
+            }
+            return acc;
+          }, {})
         });
         setUi({ selectedNodeId: null, selectedNodeIds: [], selectionDrawerOpen: false });
       });
@@ -6018,9 +6369,29 @@
       if (!elementId || listedIds.includes(elementId)) {
         return;
       }
+      const selectedElement = (current.model.elements || []).find(function (entry) {
+        return entry.id === elementId;
+      });
+      let nextElementLayout = { ...(activeDiagram.elementLayout || {}) };
+      if (selectedElement) {
+        const viewBox = getCurrentDiagramViewBox(dom.diagramSvg);
+        const insertionIndex = listedIds.length;
+        const positioned = {
+          ...selectedElement,
+          ...(getDiagramElementPosition(activeDiagram, selectedElement) || {})
+        };
+        if (!isElementVisibleInViewBox(positioned, viewBox)) {
+          const placement = computeVisiblePlacementForNode(viewBox, getNodeMetrics(positioned), insertionIndex);
+          nextElementLayout[elementId] = { x: placement.x, y: placement.y };
+        } else if (!nextElementLayout[elementId]) {
+          const basePosition = getDiagramElementPosition(activeDiagram, selectedElement);
+          nextElementLayout[elementId] = { x: basePosition.x, y: basePosition.y };
+        }
+      }
       upsertDiagram({
         ...activeDiagram,
-        elementIds: listedIds.concat([elementId])
+        elementIds: listedIds.concat([elementId]),
+        elementLayout: nextElementLayout
       });
     });
 
@@ -6044,7 +6415,13 @@
         ...activeDiagram,
         elementIds: activeDiagram.elementIds.filter(function (id) {
           return id !== removeId;
-        })
+        }),
+        elementLayout: Object.keys(activeDiagram.elementLayout || {}).reduce(function (acc, key) {
+          if (key !== removeId) {
+            acc[key] = activeDiagram.elementLayout[key];
+          }
+          return acc;
+        }, {})
       });
     });
 
@@ -6054,11 +6431,12 @@
       if (!activeDiagram || activeDiagram.type !== "standard") {
         return;
       }
+      const diagramElements = applyDiagramLayoutToElements(current.model.elements || [], activeDiagram);
       const targetId = resolveElementInputToId(dom.diagramElementList.value, current.model.elements || []);
       if (!targetId) {
         return;
       }
-      const targetElement = (current.model.elements || []).find(function (entry) {
+      const targetElement = (diagramElements || []).find(function (entry) {
         return entry.id === targetId;
       });
       if (!targetElement) {
@@ -6067,7 +6445,7 @@
 
       const viewpointFilter = current.ui.viewpointFilter || "All";
       const listedIds = new Set(Array.isArray(activeDiagram.elementIds) ? activeDiagram.elementIds : []);
-      const scopedElements = (current.model.elements || []).filter(function (entry) {
+      const scopedElements = (diagramElements || []).filter(function (entry) {
         if (!listedIds.has(entry.id)) {
           return false;
         }
@@ -6146,6 +6524,11 @@
       if (!name) {
         return;
       }
+      const createPlacement = computeVisiblePlacementForNode(
+        getCurrentDiagramViewBox(dom.diagramSvg),
+        getNodeMetrics({ name: name, type: type, members: [], functions: [] }),
+        Array.isArray(activeDiagram.elementIds) ? activeDiagram.elementIds.length : 0
+      );
       const created = addElement({
         name: name,
         type: type,
@@ -6153,12 +6536,16 @@
         description: "Created from diagram manager",
         members: [],
         functions: [],
-        x: 500,
-        y: 320
+        x: createPlacement.x,
+        y: createPlacement.y
       });
       upsertDiagram({
         ...activeDiagram,
-        elementIds: activeDiagram.elementIds.concat([created.id])
+        elementIds: activeDiagram.elementIds.concat([created.id]),
+        elementLayout: {
+          ...(activeDiagram.elementLayout || {}),
+          [created.id]: { x: createPlacement.x, y: createPlacement.y }
+        }
       });
       dom.newDiagramElementName.value = "";
     });
@@ -6677,7 +7064,7 @@
         dom.settingsBaselineSelect.value = nextDefault;
       }
       if (dom.settingsThemeSelect) {
-        dom.settingsThemeSelect.value = (current.ui && current.ui.theme) || "naf";
+        dom.settingsThemeSelect.value = (current.ui && current.ui.theme) || "dark";
       }
       if (dom.settingsLineModeSelect) {
         dom.settingsLineModeSelect.value = normalizeLineMode((current.ui && current.ui.lineMode) || "straight");
@@ -6695,7 +7082,7 @@
       if (!dom.settingsBaselineSelect) {
         return;
       }
-      const nextTheme = dom.settingsThemeSelect ? String(dom.settingsThemeSelect.value || "naf") : "naf";
+      const nextTheme = dom.settingsThemeSelect ? String(dom.settingsThemeSelect.value || "dark") : "dark";
       const nextFallbackLineMode = dom.settingsLineModeSelect
         ? normalizeLineMode(dom.settingsLineModeSelect.value)
         : normalizeLineMode((getState().ui && getState().ui.lineMode) || "straight");
@@ -6726,18 +7113,27 @@
         currentState.ui.viewpointFilter === "All"
           ? baseline.viewpoints[0] || "Custom"
           : currentState.ui.viewpointFilter;
+      const placement = computeVisiblePlacementForNode(
+        getCurrentDiagramViewBox(dom.diagramSvg),
+        getNodeMetrics({ name: "New Element", type: (baseline.nodeTypes && baseline.nodeTypes[0]) || "Capability", members: [], functions: [] }),
+        activeDiagram && Array.isArray(activeDiagram.elementIds) ? activeDiagram.elementIds.length : 0
+      );
       const created = addElement({
         name: "New Element " + (currentState.model.elements.length + 1),
         type: (baseline.nodeTypes && baseline.nodeTypes[0]) || "Capability",
         viewpoint: viewpoint,
         description: "Created from diagram",
-        x: 500,
-        y: 320
+        x: placement.x,
+        y: placement.y
       });
       if (activeDiagram && activeDiagram.type === "standard" && !activeDiagram.elementIds.includes(created.id)) {
         upsertDiagram({
           ...activeDiagram,
-          elementIds: activeDiagram.elementIds.concat([created.id])
+          elementIds: activeDiagram.elementIds.concat([created.id]),
+          elementLayout: {
+            ...(activeDiagram.elementLayout || {}),
+            [created.id]: { x: placement.x, y: placement.y }
+          }
         });
       }
     });

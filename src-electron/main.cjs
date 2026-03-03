@@ -306,38 +306,58 @@ function registerIpcHandlers() {
     }
 
     if (commandName === "save_json_file") {
-      const filePath = await pickSaveFile(args.suggested_name, [{ name: "JSON", extensions: ["json"] }]);
+      const suggestedName = args.suggestedName || args.suggested_name;
+      const jsonContent = args.jsonContent != null ? args.jsonContent : args.json_content;
+      const filePath = await pickSaveFile(suggestedName, [{ name: "JSON", extensions: ["json"] }]);
       if (!filePath) {
         return null;
       }
-      fs.writeFileSync(filePath, String(args.json_content || ""), "utf-8");
+      if (jsonContent == null) {
+        throw new Error("save_json_file missing json content");
+      }
+      fs.writeFileSync(filePath, String(jsonContent), "utf-8");
       return filePath;
     }
 
     if (commandName === "save_html_file") {
-      const filePath = await pickSaveFile(args.suggested_name, [{ name: "HTML", extensions: ["html", "htm"] }]);
+      const suggestedName = args.suggestedName || args.suggested_name;
+      const htmlContent = args.htmlContent != null ? args.htmlContent : args.html_content;
+      const filePath = await pickSaveFile(suggestedName, [{ name: "HTML", extensions: ["html", "htm"] }]);
       if (!filePath) {
         return null;
       }
-      fs.writeFileSync(filePath, String(args.html_content || ""), "utf-8");
+      if (htmlContent == null) {
+        throw new Error("save_html_file missing html content");
+      }
+      fs.writeFileSync(filePath, String(htmlContent), "utf-8");
       return filePath;
     }
 
     if (commandName === "save_svg_file") {
-      const filePath = await pickSaveFile(args.suggested_name, [{ name: "SVG", extensions: ["svg"] }]);
+      const suggestedName = args.suggestedName || args.suggested_name;
+      const svgContent = args.svgContent != null ? args.svgContent : args.svg_content;
+      const filePath = await pickSaveFile(suggestedName, [{ name: "SVG", extensions: ["svg"] }]);
       if (!filePath) {
         return null;
       }
-      fs.writeFileSync(filePath, String(args.svg_content || ""), "utf-8");
+      if (svgContent == null) {
+        throw new Error("save_svg_file missing svg content");
+      }
+      fs.writeFileSync(filePath, String(svgContent), "utf-8");
       return filePath;
     }
 
     if (commandName === "save_png_file") {
-      const filePath = await pickSaveFile(args.suggested_name, [{ name: "PNG", extensions: ["png"] }]);
+      const suggestedName = args.suggestedName || args.suggested_name;
+      const pngBytes = Array.isArray(args.pngBytes) ? args.pngBytes : args.png_bytes;
+      const filePath = await pickSaveFile(suggestedName, [{ name: "PNG", extensions: ["png"] }]);
       if (!filePath) {
         return null;
       }
-      const bytes = Array.isArray(args.png_bytes) ? Buffer.from(args.png_bytes) : Buffer.alloc(0);
+      if (!Array.isArray(pngBytes)) {
+        throw new Error("save_png_file missing png bytes");
+      }
+      const bytes = Buffer.from(pngBytes);
       fs.writeFileSync(filePath, bytes);
       return filePath;
     }
