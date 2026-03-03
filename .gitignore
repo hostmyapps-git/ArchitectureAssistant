@@ -21,4 +21,4 @@ deltaModelArchitectureReport.html
 NAFv4-ADMBw_colored.meta.json
 
 # Optional local data folder contents
-data/*.json
+data/
