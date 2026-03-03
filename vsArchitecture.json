@@ -1,7 +1,7 @@
 {
   "format": "deltaModelArchitectureExport",
   "version": 4,
-  "exportedAt": "2026-03-03T16:20:46.698Z",
+  "exportedAt": "2026-03-03T19:56:47.744Z",
   "architecture": {
     "id": "arch_zhvmzmu",
     "name": "Architecture 4",
@@ -27,7 +27,12 @@
           "type": "InformationElement",
           "viewpoint": "L4 - Logical Activities",
           "description": "",
-          "members": [],
+          "members": [
+            {
+              "name": "vs-level",
+              "value": "VS-NfD"
+            }
+          ],
           "functions": [],
           "bgColor": "",
           "fontColor": "",
@@ -41,7 +46,12 @@
           "type": "CapabilityConfiguration",
           "viewpoint": "P1 - Resource Types",
           "description": "",
-          "members": [],
+          "members": [
+            {
+              "name": "vs-level",
+              "value": "VS-NfD"
+            }
+          ],
           "functions": [],
           "bgColor": "",
           "fontColor": "",
@@ -55,7 +65,12 @@
           "type": "OperationalRole",
           "viewpoint": "L1 - Node Types",
           "description": "",
-          "members": [],
+          "members": [
+            {
+              "name": "vs-level",
+              "value": "VS-NfD"
+            }
+          ],
           "functions": [],
           "bgColor": "",
           "fontColor": "",
@@ -133,20 +148,20 @@
           ],
           "elementLayout": {
             "el_3m37337": {
-              "x": -1747.326868810195,
-              "y": -1408.842485050224
+              "x": -1813.3394420523825,
+              "y": -1411.386430362724
             },
             "el_q3t814v": {
               "x": -1623.4366455078125,
               "y": -1564.4622802734375
             },
             "el_ji91b82": {
-              "x": -1105.7083740234375,
-              "y": -1408.9769287109375
+              "x": -1109.2673950195312,
+              "y": -1398.775390625
             },
             "el_2h6jer6": {
-              "x": -1491.078125,
-              "y": -1408.0489501953125
+              "x": -1441.772216796875,
+              "y": -1408.044189453125
             },
             "el_gkgkab5": {
               "x": -1623.8524169921875,

@@ -116,20 +116,22 @@
               </div>
               <div class="fieldStack">
                 <label class="fieldLabel" for="elementViewFilter">View Filter</label>
-                <select id="elementViewFilter" title="Filter elements by viewpoint">
-                  <option value="All">All views</option>
-                </select>
+                <input id="elementViewFilter" list="elementViewFilterList" title="Filter elements by viewpoint" placeholder="All views">
+                <datalist id="elementViewFilterList">
+                  <option value="All" label="All views"></option>
+                </datalist>
               </div>
               <div class="fieldStack">
                 <label class="fieldLabel" for="elementOrphanFilter">Orphan Filter</label>
-                <select id="elementOrphanFilter" title="Filter orphan elements">
-                  <option value="all">All elements</option>
-                  <option value="anyOrphan">Any orphan condition</option>
-                  <option value="noLinks">No relationships</option>
-                  <option value="noDiagram">Not in any diagram</option>
-                  <option value="noView">Not part of a known view</option>
-                  <option value="strictOrphan">No links + no diagram + no view</option>
-                </select>
+                <input id="elementOrphanFilter" list="elementOrphanFilterList" title="Filter orphan elements" placeholder="All elements">
+                <datalist id="elementOrphanFilterList">
+                  <option value="all" label="All elements"></option>
+                  <option value="anyOrphan" label="Any orphan condition"></option>
+                  <option value="noLinks" label="No relationships"></option>
+                  <option value="noDiagram" label="Not in any diagram"></option>
+                  <option value="noView" label="Not part of a known view"></option>
+                  <option value="strictOrphan" label="No links + no diagram + no view"></option>
+                </datalist>
               </div>
             </div>
             <div class="dataTableWrap">
@@ -150,9 +152,10 @@
             <h2>Add Relationship</h2>
             <div class="formGrid">
               <input id="relationshipSearchInput" placeholder="Search relationships (source/target/type/view)">
-              <select id="relationshipViewFilter" title="Filter relationships by viewpoint">
-                <option value="All">All views</option>
-              </select>
+              <input id="relationshipViewFilter" list="relationshipViewFilterList" title="Filter relationships by viewpoint" placeholder="All views">
+              <datalist id="relationshipViewFilterList">
+                <option value="All" label="All views"></option>
+              </datalist>
             </div>
             <form id="addRelationshipForm" class="formGrid">
               <div class="fieldStack">
@@ -173,7 +176,8 @@
               </div>
               <div class="fieldStack">
                 <label class="fieldLabel" for="relTypeFilter">Relationship Type Filter</label>
-                <input id="relTypeFilter" class="selectFilterInput" placeholder="Filter relationship types...">
+                <input id="relTypeFilter" class="selectFilterInput" list="relTypeFilterList" placeholder="Filter relationship types...">
+                <datalist id="relTypeFilterList"></datalist>
               </div>
               <div class="fieldStack">
                 <label class="fieldLabel" for="relType">Relationship Type</label>

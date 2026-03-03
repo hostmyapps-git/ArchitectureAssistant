@@ -2297,7 +2297,7 @@
       const option = document.createElement("option");
       option.value = nodeType.id;
       const allowedViews = splitMultiValue(nodeType.allowedViews);
-      option.textContent = formatStereotypeLabel(nodeType.label || nodeType.id) + (allowedViews.length ? " @ " + allowedViews.length + " view(s)" : "");
+      option.textContent = String(nodeType.label || nodeType.id) + (allowedViews.length ? " @ " + allowedViews.length + " view(s)" : "");
       dom.metaModelNodeTypeList.appendChild(option);
     });
     if (previousNodeType) {
@@ -2308,7 +2308,7 @@
     (architecture.edgeTypes || []).forEach(function (edgeType) {
       const option = document.createElement("option");
       option.value = edgeType.id;
-      option.textContent = formatStereotypeLabel(edgeType.label || edgeType.id) + " (" + normalizeStrokeStyle(edgeType.strokeStyle) + ")";
+      option.textContent = String(edgeType.label || edgeType.id) + " (" + normalizeStrokeStyle(edgeType.strokeStyle) + ")";
       dom.metaModelEdgeTypeList.appendChild(option);
     });
     if (previousEdgeType) {
@@ -4884,6 +4884,41 @@
     }
   }
 
+  function refreshSelectedEdgeTypeValidity() {
+    const currentState = getState();
+    const selectedEdge = (currentState.model.relationships || []).find(function (relationship) {
+      return relationship.id === currentState.ui.selectedEdgeId;
+    }) || null;
+    const effectiveBaseline = getEffectiveBaseline(currentState.baseline);
+    const edgeTypeOptions = (effectiveBaseline.edgeTypes && effectiveBaseline.edgeTypes.length)
+      ? effectiveBaseline.edgeTypes
+      : (effectiveBaseline.stereotypes || []);
+    const nodeTypeById = new Map();
+    ((effectiveBaseline.architecture && effectiveBaseline.architecture.nodeTypes) || []).forEach(function (entry) {
+      if (!entry || !entry.id) {
+        return;
+      }
+      nodeTypeById.set(entry.id, entry);
+      nodeTypeById.set(String(entry.id).toLowerCase(), entry);
+    });
+    const edgeTypeById = new Map();
+    ((effectiveBaseline.architecture && effectiveBaseline.architecture.edgeTypes) || []).forEach(function (entry) {
+      if (!entry || !entry.id) {
+        return;
+      }
+      edgeTypeById.set(entry.id, entry);
+      edgeTypeById.set(String(entry.id).toLowerCase(), entry);
+    });
+    updateSelectedEdgeControls(
+      currentState,
+      effectiveBaseline,
+      nodeTypeById,
+      edgeTypeById,
+      edgeTypeOptions,
+      selectedEdge
+    );
+  }
+
   function render() {
     const currentState = getState();
     const effectiveBaseline = getEffectiveBaseline(currentState.baseline);
@@ -5018,11 +5053,7 @@
     const elementViewFilterValues = ["All"].concat(
       dedupe((effectiveBaseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned View"] : []))
     );
-    dom.elementViewFilter.innerHTML = elementViewFilterValues
-      .map(function (value) {
-        return '<option value="' + value + '">' + value + "</option>";
-      })
-      .join("");
+    setSelectOptions(dom.elementViewFilter, elementViewFilterValues);
     dom.elementViewFilter.value =
       elementViewFilterValues.indexOf(currentState.ui.elementViewFilter) >= 0
         ? currentState.ui.elementViewFilter
@@ -5035,11 +5066,7 @@
     const relationshipViewFilterValues = ["All"].concat(
       dedupe((effectiveBaseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned"] : []))
     );
-    dom.relationshipViewFilter.innerHTML = relationshipViewFilterValues
-      .map(function (value) {
-        return '<option value="' + value + '">' + value + "</option>";
-      })
-      .join("");
+    setSelectOptions(dom.relationshipViewFilter, relationshipViewFilterValues);
     dom.relationshipViewFilter.value =
       relationshipViewFilterValues.indexOf(currentState.ui.relationshipViewFilter) >= 0
         ? currentState.ui.relationshipViewFilter
@@ -5071,6 +5098,7 @@
     setSelectOptions(dom.elementViewpoint, effectiveBaseline.viewpoints);
     setSelectOptions(dom.elementType, nodeTypeOptions);
     setSelectOptions(dom.relType, edgeTypeOptions);
+    setSelectOptions(dom.relTypeFilter, edgeTypeOptions);
     setSelectOptions(dom.diagramRelType, edgeTypeOptions);
     setSelectOptions(dom.newDiagramElementViewpoint, effectiveBaseline.viewpoints);
     setSelectOptions(dom.newDiagramElementType, nodeTypeOptions);
@@ -5895,14 +5923,101 @@
     });
 
     on(dom.elementViewFilter, "change", function (event) {
-      setUi({ elementViewFilter: event.target.value });
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const current = getState();
+      const baseline = getEffectiveBaseline(current.baseline);
+      const modelViews = dedupe(
+        (current.model.elements || []).map(function (element) {
+          return element.viewpoint;
+        })
+      );
+      const hasUnassignedView = (current.model.elements || []).some(function (element) {
+        return !element.viewpoint;
+      });
+      const allowed = new Set(
+        ["All"].concat(dedupe((baseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned View"] : [])))
+      );
+      const nextValue = allowed.has(rawValue) ? rawValue : "All";
+      if (event.target) {
+        event.target.value = nextValue;
+      }
+      setUi({ elementViewFilter: nextValue });
+    });
+    on(dom.elementViewFilter, "input", function (event) {
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const current = getState();
+      const baseline = getEffectiveBaseline(current.baseline);
+      const modelViews = dedupe(
+        (current.model.elements || []).map(function (element) {
+          return element.viewpoint;
+        })
+      );
+      const hasUnassignedView = (current.model.elements || []).some(function (element) {
+        return !element.viewpoint;
+      });
+      const allowed = new Set(
+        ["All"].concat(dedupe((baseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned View"] : [])))
+      );
+      if (allowed.has(rawValue)) {
+        setUi({ elementViewFilter: rawValue });
+      }
     });
     on(dom.elementOrphanFilter, "change", function (event) {
-      setUi({ elementOrphanFilter: event.target.value });
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const allowed = new Set(["all", "anyOrphan", "noLinks", "noDiagram", "noView", "strictOrphan"]);
+      const nextValue = allowed.has(rawValue) ? rawValue : "all";
+      if (event.target) {
+        event.target.value = nextValue;
+      }
+      setUi({ elementOrphanFilter: nextValue });
+    });
+    on(dom.elementOrphanFilter, "input", function (event) {
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const allowed = new Set(["all", "anyOrphan", "noLinks", "noDiagram", "noView", "strictOrphan"]);
+      if (allowed.has(rawValue)) {
+        setUi({ elementOrphanFilter: rawValue });
+      }
     });
 
     on(dom.relationshipViewFilter, "change", function (event) {
-      setUi({ relationshipViewFilter: event.target.value });
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const current = getState();
+      const baseline = getEffectiveBaseline(current.baseline);
+      const modelViews = dedupe(
+        (current.model.elements || []).map(function (element) {
+          return element.viewpoint;
+        })
+      );
+      const hasUnassignedView = (current.model.elements || []).some(function (element) {
+        return !element.viewpoint;
+      });
+      const allowed = new Set(
+        ["All"].concat(dedupe((baseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned"] : [])))
+      );
+      const nextValue = allowed.has(rawValue) ? rawValue : "All";
+      if (event.target) {
+        event.target.value = nextValue;
+      }
+      setUi({ relationshipViewFilter: nextValue });
+    });
+    on(dom.relationshipViewFilter, "input", function (event) {
+      const rawValue = String((event.target && event.target.value) || "").trim();
+      const current = getState();
+      const baseline = getEffectiveBaseline(current.baseline);
+      const modelViews = dedupe(
+        (current.model.elements || []).map(function (element) {
+          return element.viewpoint;
+        })
+      );
+      const hasUnassignedView = (current.model.elements || []).some(function (element) {
+        return !element.viewpoint;
+      });
+      const allowed = new Set(
+        ["All"].concat(dedupe((baseline.viewpoints || []).concat(modelViews, hasUnassignedView ? ["Unassigned"] : [])))
+      );
+      if (allowed.has(rawValue)) {
+        setUi({ relationshipViewFilter: rawValue });
+      }
     });
     on(dom.relSource, "input", function () {
       render();
@@ -5917,10 +6032,10 @@
       render();
     });
     on(dom.selectedEdgeType, "input", function () {
-      render();
+      refreshSelectedEdgeTypeValidity();
     });
     on(dom.selectedEdgeType, "change", function () {
-      render();
+      refreshSelectedEdgeTypeValidity();
     });
 
     on(dom.resetColorDefaultsBtn, "click", function () {
@@ -5958,10 +6073,14 @@
     bindDatalistFallback(dom.elementType);
     bindDatalistFallback(dom.elementViewpoint);
     bindDatalistFallback(dom.viewpointFilter);
+    bindDatalistFallback(dom.elementViewFilter);
+    bindDatalistFallback(dom.elementOrphanFilter);
     bindDatalistFallback(dom.elementBgColor);
     bindDatalistFallback(dom.elementFontColor);
+    bindDatalistFallback(dom.relationshipViewFilter);
     bindDatalistFallback(dom.relSource);
     bindDatalistFallback(dom.relTarget);
+    bindDatalistFallback(dom.relTypeFilter);
     bindDatalistFallback(dom.relType);
     bindDatalistFallback(dom.selectedNodeType);
     bindDatalistFallback(dom.selectedNodeViewpoint);
