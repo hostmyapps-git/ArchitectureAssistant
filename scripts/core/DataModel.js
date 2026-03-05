@@ -39,6 +39,13 @@
         lineMode: null,
         elementIds: ids,
         elementLayout: elementLayout,
+        allocationSourceView: "All",
+        allocationTargetView: "All",
+        allocationRelationshipType: "All",
+        roadmapTimeScale: "month",
+        roadmapStartDate: "",
+        roadmapEndDate: "",
+        roadmapRows: [],
         focusElementId: ids[0] || null,
         depth: 1
       };
@@ -100,10 +107,53 @@
             name: diagram.name || "Diagram " + (index + 1),
             title: diagram.title || diagram.name || "Diagram " + (index + 1),
             view: diagram.view || "",
-            type: diagram.type === "clickable" ? "clickable" : "standard",
+            type: (function () {
+              const rawType = String(diagram.type || "").trim().toLowerCase();
+              if (rawType === "clickable") {
+                return "clickable";
+              }
+              if (rawType === "roadmap") {
+                return "roadmap";
+              }
+              if (
+                rawType === "allocationmatrix" ||
+                rawType === "allocation matrix" ||
+                rawType === "allocation" ||
+                rawType === "matrix"
+              ) {
+                return "allocationMatrix";
+              }
+              return "standard";
+            })(),
             lineMode: ["straight", "curved", "ortho"].includes(diagram.lineMode) ? diagram.lineMode : null,
             elementIds: ids,
             elementLayout: elementLayout,
+            allocationSourceView: String(diagram.allocationSourceView || "All").trim() || "All",
+            allocationTargetView: String(diagram.allocationTargetView || "All").trim() || "All",
+            allocationRelationshipType: String(diagram.allocationRelationshipType || "All").trim() || "All",
+            roadmapTimeScale: ["month", "quarter", "year"].includes(String(diagram.roadmapTimeScale || "").trim().toLowerCase())
+              ? String(diagram.roadmapTimeScale || "").trim().toLowerCase()
+              : "month",
+            roadmapStartDate: String(diagram.roadmapStartDate || "").trim(),
+            roadmapEndDate: String(diagram.roadmapEndDate || "").trim(),
+            roadmapRows: Array.isArray(diagram.roadmapRows)
+              ? diagram.roadmapRows
+                  .map(function (row) {
+                    const rowId = String((row && row.id) || ("rr_" + Math.random().toString(36).slice(2, 9))).trim();
+                    const mode = String((row && row.mode) || "range").trim().toLowerCase() === "milestone"
+                      ? "milestone"
+                      : "range";
+                    return {
+                      id: rowId,
+                      nodeId: String((row && row.nodeId) || "").trim(),
+                      mode: mode,
+                      startAttr: String((row && row.startAttr) || "").trim(),
+                      endAttr: String((row && row.endAttr) || "").trim(),
+                      milestoneAttr: String((row && row.milestoneAttr) || "").trim(),
+                      label: String((row && row.label) || "").trim()
+                    };
+                  })
+              : [],
             focusElementId: diagram.focusElementId || null,
             depth: Number.isFinite(diagram.depth) && diagram.depth >= 1 ? Math.floor(diagram.depth) : 1
           };

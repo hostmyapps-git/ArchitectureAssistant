@@ -381,6 +381,8 @@
                         <datalist id="diagramTypeList">
                           <option value="standard" label="Standard"></option>
                           <option value="clickable" label="Clickable"></option>
+                          <option value="allocationMatrix" label="Allocation Matrix"></option>
+                          <option value="roadmap" label="Roadmap"></option>
                         </datalist>
                       </div>
                       <div class="fieldStack">
@@ -418,6 +420,73 @@
                       <input id="diagramFocusSelect" list="diagramFocusSelectList" placeholder="Focus element" title="Focus element">
                       <datalist id="diagramFocusSelectList"></datalist>
                       <input id="diagramDepthInput" type="number" min="1" step="1" value="1" placeholder="Depth n">
+                    </div>
+                    <div id="allocationDiagramControls" class="formGrid">
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramAllocationSourceView">Source View</label>
+                        <input id="diagramAllocationSourceView" list="diagramAllocationSourceViewList" placeholder="All views">
+                        <datalist id="diagramAllocationSourceViewList"></datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramAllocationTargetView">Target View</label>
+                        <input id="diagramAllocationTargetView" list="diagramAllocationTargetViewList" placeholder="All views">
+                        <datalist id="diagramAllocationTargetViewList"></datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="diagramAllocationRelType">Relationship Type</label>
+                        <input id="diagramAllocationRelType" list="diagramAllocationRelTypeList" placeholder="All relationship types">
+                        <datalist id="diagramAllocationRelTypeList"></datalist>
+                      </div>
+                    </div>
+                    <div id="roadmapDiagramControls" class="formGrid">
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapRowNode">Roadmap Row Node</label>
+                        <input id="roadmapRowNode" list="roadmapRowNodeList" placeholder="Select node">
+                        <datalist id="roadmapRowNodeList"></datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapRowStartAttr">Start Attribute</label>
+                        <div class="fieldWithBadge">
+                          <input id="roadmapRowStartAttr" list="roadmapRowStartAttrList" placeholder="e.g. plannedStart">
+                          <span id="roadmapRowStartAttrStatus" class="deviationBadge">Select</span>
+                        </div>
+                        <datalist id="roadmapRowStartAttrList"></datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapRowEndAttr">End Attribute</label>
+                        <div class="fieldWithBadge">
+                          <input id="roadmapRowEndAttr" list="roadmapRowEndAttrList" placeholder="e.g. plannedEnd">
+                          <span id="roadmapRowEndAttrStatus" class="deviationBadge">Select</span>
+                        </div>
+                        <datalist id="roadmapRowEndAttrList"></datalist>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapStartDateValue">Start Date Value</label>
+                        <div class="fieldWithBadge">
+                          <input id="roadmapStartDateValue" placeholder="YYYY-MM-DD">
+                          <span id="roadmapStartDateValueStatus" class="deviationBadge">Format</span>
+                        </div>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapEndDateValue">End Date Value</label>
+                        <div class="fieldWithBadge">
+                          <input id="roadmapEndDateValue" placeholder="YYYY-MM-DD">
+                          <span id="roadmapEndDateValueStatus" class="deviationBadge">Format</span>
+                        </div>
+                      </div>
+                      <div class="fieldStack">
+                        <label class="fieldLabel" for="roadmapRowLabel">Row Label (optional)</label>
+                        <input id="roadmapRowLabel" placeholder="Optional display label">
+                      </div>
+                      <button id="roadmapAddOrUpdateRowBtn" type="button">Add Row</button>
+                      <button id="roadmapCancelEditRowBtn" type="button" hidden>Cancel Row Edit</button>
+                      <button id="roadmapSetStartAttrBtn" type="button">Set Start Attribute Value</button>
+                      <button id="roadmapSetEndAttrBtn" type="button">Set End Attribute Value</button>
+                      <div class="fieldStack fieldSpanFull">
+                        <label class="fieldLabel" for="roadmapRowsList">Roadmap Rows</label>
+                        <select id="roadmapRowsList" size="8"></select>
+                      </div>
+                      <button id="roadmapRemoveRowBtn" type="button">Remove Selected Row</button>
                     </div>
                     <div id="diagramFindControls" class="formGrid">
                       <div class="fieldStack">
@@ -465,6 +534,8 @@
                 <div id="diagramMetaDisplay" class="diagramMetaDisplay"></div>
               </div>
               <svg id="diagramSvg" viewBox="0 0 1200 700" aria-label="Architecture diagram"></svg>
+              <div id="allocationMatrixPanel" class="allocationMatrixPanel" hidden></div>
+              <div id="roadmapPanel" class="roadmapPanel" hidden></div>
               <div id="selectionDrawerBackdrop" class="selectionDrawerBackdrop" hidden></div>
               <aside id="selectionDrawer" class="selectionDrawer" hidden>
                 <div class="selectionDrawerHeader">

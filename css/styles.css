@@ -24,7 +24,7 @@
 body {
   margin: 0;
   font-size: 15px;
-  font-family: "Avenir Next", "Segoe UI Variable", "IBM Plex Sans", "Noto Sans", "Helvetica Neue", sans-serif;
+  font-family: Arial, "Liberation Sans", "DejaVu Sans", sans-serif;
   color: var(--ink);
   background:
     radial-gradient(circle at 14% 8%, var(--bg-grad-a) 0%, transparent 32%),
@@ -558,6 +558,50 @@ button:focus-visible {
 #diagramFindList {
   width: 100%;
 }
+#allocationDiagramControls {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.42rem;
+}
+#allocationDiagramControls .fieldStack {
+  min-width: 0;
+}
+#allocationDiagramControls .fieldStack input {
+  width: 100%;
+  min-width: 0;
+}
+#clickableDiagramControls {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.42rem;
+}
+#clickableDiagramControls input {
+  width: 100%;
+  min-width: 0;
+}
+#roadmapDiagramControls {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.42rem;
+}
+#roadmapDiagramControls .fieldStack {
+  min-width: 0;
+}
+#roadmapDiagramControls .fieldStack input,
+#roadmapDiagramControls .fieldStack select {
+  width: 100%;
+  min-width: 0;
+}
+#roadmapDiagramControls .fieldSpanFull {
+  grid-column: 1 / -1;
+}
+#roadmapDiagramControls .fieldWithBadge {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (max-width: 1240px) {
+  #clickableDiagramControls,
+  #allocationDiagramControls,
+  #roadmapDiagramControls {
+    grid-template-columns: 1fr;
+  }
+}
 .dataFilterBar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -814,12 +858,273 @@ th { background: var(--table-head); }
   border-radius: 10px;
   background: var(--canvas-bg);
 }
+#diagramSvg[hidden] {
+  display: none !important;
+}
+.allocationMatrixPanel {
+  width: 100%;
+  height: min(70vh, 720px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas-bg);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.allocationMatrixPanel[hidden] {
+  display: none !important;
+}
+.roadmapPanel {
+  width: 100%;
+  height: min(70vh, 720px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas-bg);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.roadmapPanel[hidden] {
+  display: none !important;
+}
+.roadmapSummary {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.roadmapTimelineHeader {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+  background: var(--table-head);
+}
+.roadmapLabelHeader {
+  padding: 0.42rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border-right: 1px solid var(--line);
+}
+.roadmapTrackHeader {
+  position: relative;
+  min-height: 38px;
+}
+.roadmapTick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+}
+.roadmapTickLine {
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line);
+}
+.roadmapTickLabel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-45%);
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.roadmapRows {
+  overflow: auto;
+}
+.roadmapRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.roadmapRow:hover {
+  background: color-mix(in srgb, var(--brand) 5%, var(--panel));
+}
+.roadmapRow.selected {
+  background: color-mix(in srgb, var(--brand) 12%, var(--panel));
+}
+.roadmapRow.deviation {
+  background: #fbe7e4;
+}
+.roadmapRowLabel {
+  padding: 0.35rem 0.55rem;
+  display: grid;
+  gap: 0.15rem;
+  border-right: 1px solid var(--line);
+  font-size: 0.76rem;
+}
+.roadmapRowNodeId {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.roadmapTrack {
+  position: relative;
+  min-height: 42px;
+}
+.roadmapBar {
+  position: absolute;
+  top: 12px;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #628fc4 0%, #4878b1 100%);
+  border: 1px solid #355f89;
+}
+.roadmapMilestone {
+  position: absolute;
+  top: 13px;
+  width: 14px;
+  height: 14px;
+  background: #e5f2ff;
+  border: 1px solid #355f89;
+  transform: translateX(-50%) rotate(45deg);
+}
+.roadmapInvalidHint {
+  position: absolute;
+  top: 11px;
+  left: 10px;
+  color: #8f3a2e;
+  font-size: 0.72rem;
+}
+.roadmapIssues {
+  grid-column: 1 / -1;
+  padding: 0 0.55rem 0.35rem;
+  color: #8f3a2e;
+  font-size: 0.7rem;
+}
+.allocationMatrixSummary {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.allocationMatrixScroll {
+  overflow: auto;
+}
+.allocationMatrixTable {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  background: var(--panel);
+}
+.allocationMatrixTable th,
+.allocationMatrixTable td {
+  border: 1px solid var(--line);
+  padding: 0.3rem 0.4rem;
+  font-size: 0.74rem;
+  vertical-align: top;
+}
+.allocationMatrixHeader {
+  background: var(--table-head);
+  color: var(--ink);
+  min-width: 110px;
+  max-width: 220px;
+}
+.allocationMatrixTable thead .allocationMatrixHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.allocationMatrixRowHeader {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.allocationMatrixCell {
+  min-width: 130px;
+  max-width: 220px;
+  background: var(--panel-elevated);
+}
+.allocationMatrixCell.isSelected {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.allocationMatrixCellBtn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  min-height: 36px;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.allocationMatrixCell.hasRelations {
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel-elevated));
+}
+.allocationMatrixCell.hasOpenDeviation {
+  background: #fbe7e4;
+}
+.allocationMatrixCell.hasAcceptedDeviation {
+  background: #fff1d9;
+}
+.allocationMatrixCount {
+  font-weight: 600;
+}
+.allocationMatrixTypes {
+  margin-top: 0.2rem;
+  font-size: 0.69rem;
+  color: var(--muted);
+  line-height: 1.25;
+}
+.allocationMatrixEmpty {
+  opacity: 0.52;
+}
+.allocationMatrixDetail {
+  border-top: 1px solid var(--line);
+  padding: 0.5rem 0.6rem;
+  background: var(--panel);
+}
+.allocationMatrixDetailHeader {
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+}
+.allocationMatrixRelationshipList {
+  list-style: none;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  display: grid;
+  gap: 0.32rem;
+}
+.allocationMatrixRelationshipList li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.allocationMatrixRelationshipType {
+  font-size: 0.74rem;
+  color: var(--ink);
+}
+.allocationMatrixAddRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  margin-bottom: 0.32rem;
+}
+.allocationMatrixAddRow .fieldWithBadge {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
 .diagramCanvasPane.clickableDiagramMode #diagramSvg {
   border-color: #9db6d7;
   background:
     radial-gradient(circle at 12% 12%, rgba(102, 152, 212, 0.26) 0%, transparent 34%),
     radial-gradient(circle at 88% 22%, rgba(80, 133, 199, 0.2) 0%, transparent 35%),
     linear-gradient(180deg, #eef5ff 0%, #dde9fb 100%);
+}
+.diagramCanvasPane.allocationDiagramMode .allocationMatrixPanel {
+  border-color: #8ba7ca;
+  background:
+    radial-gradient(circle at 8% 16%, rgba(109, 151, 210, 0.2) 0%, transparent 34%),
+    linear-gradient(180deg, #eef5ff 0%, #dde8fb 100%);
+}
+.diagramCanvasPane.roadmapDiagramMode .roadmapPanel {
+  border-color: #8ba7ca;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(114, 154, 210, 0.18) 0%, transparent 34%),
+    linear-gradient(180deg, #eff6ff 0%, #e0ebfb 100%);
 }
 .diagramCanvasPane.clickableDiagramMode .diagramMetaDisplay {
   border-color: #b3c7e7;

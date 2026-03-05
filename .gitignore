@@ -17,3 +17,7 @@ frontend-dist/
 
 # Optional local data folder contents
 data/
+
+# Support Components
+AGENTS.md
+

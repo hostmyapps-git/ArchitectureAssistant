@@ -356,6 +356,25 @@
     return "straight";
   }
 
+  function normalizeDiagramType(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (raw === "clickable") {
+      return "clickable";
+    }
+    if (raw === "roadmap") {
+      return "roadmap";
+    }
+    if (
+      raw === "allocationmatrix" ||
+      raw === "allocation matrix" ||
+      raw === "allocation" ||
+      raw === "matrix"
+    ) {
+      return "allocationMatrix";
+    }
+    return "standard";
+  }
+
   function dashArrayForStrokeStyle(strokeStyle) {
     const normalized = normalizeStrokeStyle(strokeStyle);
     if (normalized === "dotted") {
@@ -2060,6 +2079,8 @@
   let tauriMenuUnlisten = null;
   let baselineLoadStatus = "";
   let lastLoggedBaselineSignature = "";
+  let allocationMatrixSelection = null;
+  let editingRoadmapRowId = null;
 
   function getTauriApi() {
     return window.__TAURI__ || null;
@@ -3380,6 +3401,7 @@
       [bounds.minX, bounds.minY, bounds.width, bounds.height].join(" ") +
       '" aria-label="Diagram preview">' +
       "<defs>" +
+      "<style><![CDATA[text{font-family:Arial,'Liberation Sans','DejaVu Sans',sans-serif;}]]></style>" +
       '<marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">' +
       '<path d="M 0 0 L 10 5 L 0 10 z" fill="#5d5449"></path>' +
       "</marker>" +
@@ -3387,6 +3409,155 @@
       '<rect x="' + bounds.minX + '" y="' + bounds.minY + '" width="' + bounds.width + '" height="' + bounds.height + '" fill="#fffdf8" />' +
       '<g class="diagramEdges">' + edgeLayer + "</g>" +
       '<g class="diagramNodes">' + nodeLayer + "</g>" +
+      "</svg>"
+    );
+  }
+
+  function buildRoadmapSvgForExport(diagram, allElements) {
+    const elements = Array.isArray(allElements) ? allElements : [];
+    const rows = Array.isArray(diagram.roadmapRows) ? diagram.roadmapRows : [];
+    const elementById = new Map(
+      elements.map(function (entry) {
+        return [entry.id, entry];
+      })
+    );
+    const resolvedRows = rows.map(function (row) {
+      return buildRoadmapRowResult(row, elementById);
+    });
+    const diagramStartMs = parseIsoDateToUtcMs(diagram.roadmapStartDate || "");
+    const diagramEndMs = parseIsoDateToUtcMs(diagram.roadmapEndDate || "");
+    const validBounds = resolvedRows.filter(function (entry) {
+      return Number.isFinite(entry.startBound) && Number.isFinite(entry.endBound);
+    });
+    let minMs = Number.isFinite(diagramStartMs) ? diagramStartMs : null;
+    let maxMs = Number.isFinite(diagramEndMs) ? diagramEndMs : null;
+    if (minMs == null && validBounds.length) {
+      minMs = Math.min.apply(null, validBounds.map(function (entry) { return entry.startBound; }));
+    }
+    if (maxMs == null && validBounds.length) {
+      maxMs = Math.max.apply(null, validBounds.map(function (entry) { return entry.endBound; }));
+    }
+    if (minMs == null) {
+      minMs = Date.now() - (14 * 24 * 60 * 60 * 1000);
+    }
+    if (maxMs == null) {
+      maxMs = Date.now() + (120 * 24 * 60 * 60 * 1000);
+    }
+    if (maxMs <= minMs) {
+      maxMs = minMs + (24 * 60 * 60 * 1000);
+    }
+    const scale = normalizeRoadmapScale(diagram.roadmapTimeScale || "month");
+    const totalSpan = maxMs - minMs;
+    const labelAreaWidth = 280;
+    const rightPad = 40;
+    const trackStartX = labelAreaWidth + 20;
+    const trackWidth = 1020;
+    const rowHeight = 48;
+    const headHeight = 58;
+    const chartTop = 78;
+    const rowsHeight = Math.max(1, resolvedRows.length) * rowHeight;
+    const width = trackStartX + trackWidth + rightPad;
+    const height = chartTop + rowsHeight + 60;
+    const toX = function (ms) {
+      return trackStartX + clamp(((ms - minMs) / totalSpan), 0, 1) * trackWidth;
+    };
+
+    const tickDates = [];
+    const cursor = new Date(minMs);
+    cursor.setUTCHours(0, 0, 0, 0);
+    if (scale === "year") {
+      cursor.setUTCMonth(0, 1);
+    } else if (scale === "quarter") {
+      cursor.setUTCMonth(Math.floor(cursor.getUTCMonth() / 3) * 3, 1);
+    } else {
+      cursor.setUTCDate(1);
+    }
+    if (cursor.getTime() > minMs) {
+      if (scale === "year") {
+        cursor.setUTCFullYear(cursor.getUTCFullYear() - 1);
+      } else if (scale === "quarter") {
+        cursor.setUTCMonth(cursor.getUTCMonth() - 3);
+      } else {
+        cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+      }
+    }
+    while (cursor.getTime() <= maxMs) {
+      tickDates.push(new Date(cursor.getTime()));
+      if (scale === "year") {
+        cursor.setUTCFullYear(cursor.getUTCFullYear() + 1);
+      } else if (scale === "quarter") {
+        cursor.setUTCMonth(cursor.getUTCMonth() + 3);
+      } else {
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
+    }
+
+    const tickLayer = tickDates.map(function (dateValue) {
+      const x = toX(dateValue.getTime());
+      let label = String(dateValue.getUTCFullYear());
+      if (scale === "month") {
+        label = String(dateValue.getUTCFullYear()) + "-" + String(dateValue.getUTCMonth() + 1).padStart(2, "0");
+      } else if (scale === "quarter") {
+        label = String(dateValue.getUTCFullYear()) + "-Q" + (Math.floor(dateValue.getUTCMonth() / 3) + 1);
+      }
+      return (
+        '<line x1="' + x + '" y1="' + (headHeight - 6) + '" x2="' + x + '" y2="' + (height - 32) + '" stroke="#d7cfbf" stroke-width="1"/>' +
+        '<text x="' + (x + 2) + '" y="' + (headHeight - 12) + '" font-size="10" fill="#665f55">' + escapeHtml(label) + "</text>"
+      );
+    }).join("");
+
+    const rowLayer = resolvedRows.map(function (entry, index) {
+      const y = chartTop + index * rowHeight;
+      const nodeName = entry.node ? (entry.node.name || entry.node.id) : entry.row.nodeId;
+      const rowLabel = String(entry.row.label || "").trim() || nodeName;
+      const rowBg = index % 2 === 0 ? "#fffdf8" : "#fcf8ef";
+      const deviationColor = "#8f3a2e";
+      const base =
+        '<rect x="0" y="' + y + '" width="' + width + '" height="' + rowHeight + '" fill="' + rowBg + '"/>' +
+        '<line x1="0" y1="' + y + '" x2="' + width + '" y2="' + y + '" stroke="#ddd4c5" stroke-width="1"/>' +
+        '<text x="10" y="' + (y + 19) + '" font-size="12" fill="#2a313b">' + escapeHtml(truncateText(rowLabel, 38)) + "</text>" +
+        '<text x="10" y="' + (y + 34) + '" font-size="10" fill="#6e695f">' + escapeHtml("(" + (entry.row.nodeId || "-") + ")") + "</text>";
+      if (entry.mode === "range" && Number.isFinite(entry.startMs) && Number.isFinite(entry.endMs)) {
+        const x1 = toX(entry.startMs);
+        const x2 = toX(entry.endMs);
+        return (
+          base +
+          '<rect x="' + x1 + '" y="' + (y + 14) + '" width="' + Math.max(1.8, x2 - x1) + '" height="16" rx="8" ry="8" fill="#5f89bc" stroke="#3b5e88" stroke-width="1"/>'
+        );
+      }
+      if (entry.mode === "milestone" && Number.isFinite(entry.milestoneMs)) {
+        const x = toX(entry.milestoneMs);
+        const cy = y + 22;
+        return (
+          base +
+          '<polygon points="' +
+          (x) + "," + (cy - 8) + " " +
+          (x + 8) + "," + (cy) + " " +
+          (x) + "," + (cy + 8) + " " +
+          (x - 8) + "," + (cy) +
+          '" fill="#e6f2ff" stroke="#3b5e88" stroke-width="1.2"/>'
+        );
+      }
+      return (
+        base +
+        '<text x="' + trackStartX + '" y="' + (y + 27) + '" font-size="11" fill="' + deviationColor + '">' +
+        escapeHtml("Missing or invalid date values") +
+        "</text>"
+      );
+    }).join("");
+
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" class="diagramExportSvg" viewBox="0 0 ' + width + " " + height + '" aria-label="Roadmap export">' +
+      "<defs><style><![CDATA[text{font-family:Arial,'Liberation Sans','DejaVu Sans',sans-serif;}]]></style></defs>" +
+      '<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#fffdf8"/>' +
+      '<text x="12" y="24" font-size="15" font-weight="700" fill="#2e3640">' + escapeHtml(diagram.title || diagram.name || "Roadmap") + "</text>" +
+      '<text x="12" y="42" font-size="11" fill="#6b6459">' +
+      escapeHtml("Scale: " + scale + " | Range: " + formatUtcDate(minMs) + " to " + formatUtcDate(maxMs)) +
+      "</text>" +
+      '<line x1="0" y1="' + (headHeight + 10) + '" x2="' + width + '" y2="' + (headHeight + 10) + '" stroke="#cfc6b5" stroke-width="1"/>' +
+      tickLayer +
+      rowLayer +
+      '<line x1="0" y1="' + (height - 32) + '" x2="' + width + '" y2="' + (height - 32) + '" stroke="#cfc6b5" stroke-width="1"/>' +
       "</svg>"
     );
   }
@@ -3573,14 +3744,16 @@
     }
     const elements = Array.isArray(currentState.model.elements) ? currentState.model.elements : [];
     const relationships = Array.isArray(currentState.model.relationships) ? currentState.model.relationships : [];
-    const svgText = buildDiagramPreviewSvg(
-      diagram,
-      elements,
-      relationships,
-      effectiveColorScheme,
-      edgeTypeById,
-      "diagramExportSvg"
-    );
+    const svgText = diagram.type === "roadmap"
+      ? buildRoadmapSvgForExport(diagram, elements)
+      : buildDiagramPreviewSvg(
+          diagram,
+          elements,
+          relationships,
+          effectiveColorScheme,
+          edgeTypeById,
+          "diagramExportSvg"
+        );
     if (!svgText || svgText.indexOf("<svg") !== 0) {
       return null;
     }
@@ -4500,6 +4673,53 @@
     dom.addRelationshipForm.reset();
   }
 
+  function syncEditingFormsWithState(currentState) {
+    const elements = (currentState && currentState.model && currentState.model.elements) || [];
+    const relationships = (currentState && currentState.model && currentState.model.relationships) || [];
+
+    if (editingElementId) {
+      const editingElement = elements.find(function (entry) {
+        return entry.id === editingElementId;
+      });
+      if (!editingElement) {
+        resetElementEditMode();
+      } else if (currentState.ui && currentState.ui.activeTab === "dataTab") {
+        document.getElementById("elementName").value = editingElement.name || "";
+        assignSelectValue(dom.elementType, editingElement.type || "");
+        assignSelectValue(dom.elementViewpoint, editingElement.viewpoint || "");
+        document.getElementById("elementDescription").value = editingElement.description || "";
+        dom.elementMembers.value = formatMembersField(editingElement.members);
+        dom.elementFunctions.value = formatCsvField(editingElement.functions);
+        dom.elementBgColor.value = editingElement.bgColor || "";
+        dom.elementFontColor.value = editingElement.fontColor || "";
+        dom.elementSubmitBtn.textContent = "Update Element";
+        dom.elementCancelEditBtn.hidden = false;
+      }
+    }
+
+    if (editingRelationshipId) {
+      const editingRelationship = relationships.find(function (entry) {
+        return entry.id === editingRelationshipId;
+      });
+      if (!editingRelationship) {
+        resetRelationshipEditMode();
+      } else if (currentState.ui && currentState.ui.activeTab === "dataTab") {
+        const sourceElement = elements.find(function (entry) {
+          return entry.id === editingRelationship.sourceId;
+        });
+        const targetElement = elements.find(function (entry) {
+          return entry.id === editingRelationship.targetId;
+        });
+        dom.relSource.value = sourceElement ? formatElementInputLabel(sourceElement) : (editingRelationship.sourceId || "");
+        dom.relTarget.value = targetElement ? formatElementInputLabel(targetElement) : (editingRelationship.targetId || "");
+        assignSelectValue(dom.relType, editingRelationship.type || "");
+        document.getElementById("relDescription").value = editingRelationship.description || "";
+        dom.relationshipSubmitBtn.textContent = "Update Relationship";
+        dom.relationshipCancelEditBtn.hidden = false;
+      }
+    }
+  }
+
   function addRelationship(partial) {
     const entry = {
       id: createId("rel"),
@@ -4587,6 +4807,651 @@
       return byName[0].id;
     }
     return "";
+  }
+
+  function matchesElementViewFilter(element, filterValue) {
+    const normalizedFilter = String(filterValue || "All").trim();
+    if (!element) {
+      return false;
+    }
+    if (!normalizedFilter || normalizedFilter === "All") {
+      return true;
+    }
+    if (normalizedFilter === "Unassigned") {
+      return !String(element.viewpoint || "").trim();
+    }
+    return String(element.viewpoint || "").trim() === normalizedFilter;
+  }
+
+  function getRoadmapRowSelectedNode(elements) {
+    return (elements || []).find(function (entry) {
+      return entry.id === resolveElementInputToId(dom.roadmapRowNode && dom.roadmapRowNode.value, elements || []);
+    }) || null;
+  }
+
+  function updateRoadmapRowAttributePickers(elements) {
+    const selectedNode = getRoadmapRowSelectedNode(elements || []);
+    const attributeNames = selectedNode
+      ? dedupe(
+          (selectedNode.members || []).map(function (member) {
+            return normalizeMemberItem(member).name;
+          })
+        )
+      : [];
+    setInputDatalistEntries(
+      dom.roadmapRowStartAttr,
+      attributeNames.map(function (name) {
+        return { value: name, label: name };
+      })
+    );
+    setInputDatalistEntries(
+      dom.roadmapRowEndAttr,
+      attributeNames.map(function (name) {
+        return { value: name, label: name };
+      })
+    );
+  }
+
+  function updateRoadmapRowValidityBadges(elements) {
+    const selectedNode = getRoadmapRowSelectedNode(elements || []);
+    const startAttr = String((dom.roadmapRowStartAttr && dom.roadmapRowStartAttr.value) || "").trim();
+    const endAttr = String((dom.roadmapRowEndAttr && dom.roadmapRowEndAttr.value) || "").trim();
+
+    const evaluate = function (attributeName, statusElement) {
+      if (!statusElement) {
+        return;
+      }
+      if (!attributeName) {
+        setValidityBadge(statusElement, "none", "Select");
+        return;
+      }
+      const memberValue = selectedNode ? getElementMemberValueByName(selectedNode, attributeName) : "";
+      const hasIsoDate = parseIsoDateToUtcMs(memberValue) != null;
+      setValidityBadge(statusElement, hasIsoDate ? "ok" : "warn", hasIsoDate ? "Compliant" : "Deviation");
+    };
+    evaluate(startAttr, dom.roadmapRowStartAttrStatus);
+    evaluate(endAttr, dom.roadmapRowEndAttrStatus);
+  }
+
+  function updateRoadmapDateInputStatuses() {
+    const startValue = String((dom.roadmapStartDateValue && dom.roadmapStartDateValue.value) || "").trim();
+    const endValue = String((dom.roadmapEndDateValue && dom.roadmapEndDateValue.value) || "").trim();
+    if (dom.roadmapStartDateValueStatus) {
+      if (!startValue) {
+        setValidityBadge(dom.roadmapStartDateValueStatus, "none", "Format");
+      } else {
+        setValidityBadge(
+          dom.roadmapStartDateValueStatus,
+          parseIsoDateToUtcMs(startValue) != null ? "ok" : "warn",
+          parseIsoDateToUtcMs(startValue) != null ? "Compliant" : "Deviation"
+        );
+      }
+    }
+    if (dom.roadmapEndDateValueStatus) {
+      if (!endValue) {
+        setValidityBadge(dom.roadmapEndDateValueStatus, "none", "Format");
+      } else {
+        setValidityBadge(
+          dom.roadmapEndDateValueStatus,
+          parseIsoDateToUtcMs(endValue) != null ? "ok" : "warn",
+          parseIsoDateToUtcMs(endValue) != null ? "Compliant" : "Deviation"
+        );
+      }
+    }
+  }
+
+  function renderAllocationMatrixPanel(panelElement, payload) {
+    if (!panelElement) {
+      return;
+    }
+    const elements = Array.isArray(payload.elements) ? payload.elements : [];
+    const relationships = Array.isArray(payload.relationships) ? payload.relationships : [];
+    const sourceView = String(payload.sourceView || "All").trim() || "All";
+    const targetView = String(payload.targetView || "All").trim() || "All";
+    const relationshipType = String(payload.relationshipType || "All").trim() || "All";
+    const edgeTypeById = payload.edgeTypeById || new Map();
+    const relationshipResultById = payload.relationshipResultById || new Map();
+    const edgeTypeOptions = Array.isArray(payload.edgeTypeOptions) ? payload.edgeTypeOptions : [];
+    const effectiveBaseline = payload.effectiveBaseline || null;
+    const activeSelection = payload.activeSelection || null;
+
+    const edgeRules = ((effectiveBaseline && effectiveBaseline.architecture && effectiveBaseline.architecture.edgeTypes) || []);
+    const edgeRuleById = new Map();
+    edgeRules.forEach(function (rule) {
+      if (!rule || !rule.id) {
+        return;
+      }
+      edgeRuleById.set(normalizeTypeToken(rule.id), rule);
+    });
+
+    function getValidTypesForPair(sourceElement, targetElement) {
+      if (!sourceElement || !targetElement) {
+        return [];
+      }
+      return edgeTypeOptions.filter(function (typeId) {
+        const rule = edgeRuleById.get(normalizeTypeToken(typeId)) || null;
+        return isEdgeTypeValidForNodeSelection(rule, sourceElement, targetElement);
+      });
+    }
+
+    const sourceElements = elements.filter(function (entry) {
+      return matchesElementViewFilter(entry, sourceView);
+    });
+    const targetElements = elements.filter(function (entry) {
+      return matchesElementViewFilter(entry, targetView);
+    });
+    const sourceIds = new Set(sourceElements.map(function (entry) { return entry.id; }));
+    const targetIds = new Set(targetElements.map(function (entry) { return entry.id; }));
+
+    const cellRelationships = new Map();
+    relationships.forEach(function (relationship) {
+      if (!sourceIds.has(relationship.sourceId) || !targetIds.has(relationship.targetId)) {
+        return;
+      }
+      if (relationshipType !== "All" && String(relationship.type || "") !== relationshipType) {
+        return;
+      }
+      const key = relationship.sourceId + "::" + relationship.targetId;
+      if (!cellRelationships.has(key)) {
+        cellRelationships.set(key, []);
+      }
+      cellRelationships.get(key).push(relationship);
+    });
+
+    const targetHeader = targetElements
+      .map(function (entry) {
+        return '<th class="allocationMatrixHeader">' + escapeHtml(entry.name || entry.id) + "</th>";
+      })
+      .join("");
+    const rowsHtml = sourceElements
+      .map(function (sourceElement) {
+        const cellsHtml = targetElements
+          .map(function (targetElement) {
+            const key = sourceElement.id + "::" + targetElement.id;
+            const entries = cellRelationships.get(key) || [];
+            const hasOpenDeviation = entries.some(function (relationship) {
+              const result = relationshipResultById.get(relationship.id) || null;
+              return !!(result && result.isDeviation) && !relationship.allowDeviation;
+            });
+            const hasAcceptedDeviation = entries.some(function (relationship) {
+              const result = relationshipResultById.get(relationship.id) || null;
+              return !!(result && result.isDeviation) && !!relationship.allowDeviation;
+            });
+            const classes = ["allocationMatrixCell"];
+            const isSelected = !!(
+              activeSelection &&
+              activeSelection.sourceId === sourceElement.id &&
+              activeSelection.targetId === targetElement.id
+            );
+            if (entries.length > 0) {
+              classes.push("hasRelations");
+            }
+            if (hasOpenDeviation) {
+              classes.push("hasOpenDeviation");
+            } else if (hasAcceptedDeviation) {
+              classes.push("hasAcceptedDeviation");
+            }
+            if (isSelected) {
+              classes.push("isSelected");
+            }
+            if (!entries.length) {
+              return (
+                '<td class="' +
+                classes.join(" ") +
+                '">' +
+                '<button type="button" class="allocationMatrixCellBtn" data-action="selectAllocationCell" data-source-id="' +
+                sourceElement.id +
+                '" data-target-id="' +
+                targetElement.id +
+                '">' +
+                '<span class="allocationMatrixEmpty">-</span>' +
+                "</button>" +
+                "</td>"
+              );
+            }
+            const labels = dedupe(entries.map(function (relationship) {
+              const rule =
+                edgeTypeById.get(relationship.type) ||
+                edgeTypeById.get(String(relationship.type || "").toLowerCase()) ||
+                null;
+              return (rule && rule.label) || relationship.type || "Relationship";
+            }));
+            return (
+              '<td class="' +
+              classes.join(" ") +
+              '">' +
+              '<button type="button" class="allocationMatrixCellBtn" data-action="selectAllocationCell" data-source-id="' +
+              sourceElement.id +
+              '" data-target-id="' +
+              targetElement.id +
+              '">' +
+              '<div class="allocationMatrixCount">' +
+              entries.length +
+              "</div>" +
+              '<div class="allocationMatrixTypes">' +
+              escapeHtml(labels.join(", ")) +
+              "</div>" +
+              "</button>" +
+              "</td>"
+            );
+          })
+          .join("");
+        return (
+          "<tr>" +
+          '<th class="allocationMatrixHeader allocationMatrixRowHeader">' +
+          escapeHtml(sourceElement.name || sourceElement.id) +
+          "</th>" +
+          cellsHtml +
+          "</tr>"
+        );
+      })
+      .join("");
+
+    const selectedSource = activeSelection
+      ? sourceElements.find(function (entry) { return entry.id === activeSelection.sourceId; }) || null
+      : null;
+    const selectedTarget = activeSelection
+      ? targetElements.find(function (entry) { return entry.id === activeSelection.targetId; }) || null
+      : null;
+    const selectedKey = selectedSource && selectedTarget ? (selectedSource.id + "::" + selectedTarget.id) : "";
+    const selectedRelationships = selectedKey ? (cellRelationships.get(selectedKey) || []) : [];
+    const validRelationshipTypes = getValidTypesForPair(selectedSource, selectedTarget);
+    const addTypeOptions = (validRelationshipTypes.length ? validRelationshipTypes : edgeTypeOptions);
+    const addTypeOptionsHtml = addTypeOptions
+      .map(function (value) {
+        const edgeType = edgeTypeById.get(value) || edgeTypeById.get(String(value || "").toLowerCase()) || null;
+        const label = (edgeType && edgeType.label) || value;
+        return '<option value="' + escapeHtml(value) + '" label="' + escapeHtml(label) + '"></option>';
+      })
+      .join("");
+    const selectedDetailHtml = selectedSource && selectedTarget
+      ? (
+        '<div class="allocationMatrixDetail">' +
+        '<div class="allocationMatrixDetailHeader"><strong>Selected:</strong> ' +
+        escapeHtml(selectedSource.name || selectedSource.id) +
+        " -> " +
+        escapeHtml(selectedTarget.name || selectedTarget.id) +
+        "</div>" +
+        (
+          selectedRelationships.length
+            ? (
+              '<ul class="allocationMatrixRelationshipList">' +
+              selectedRelationships.map(function (relationship) {
+                const edgeType =
+                  edgeTypeById.get(relationship.type) ||
+                  edgeTypeById.get(String(relationship.type || "").toLowerCase()) ||
+                  null;
+                const label = (edgeType && edgeType.label) || relationship.type || "Relationship";
+                return (
+                  "<li>" +
+                  '<span class="allocationMatrixRelationshipType">' + escapeHtml(label) + "</span>" +
+                  '<button type="button" data-action="deleteAllocationRelationship" data-relationship-id="' +
+                  relationship.id +
+                  '">Remove</button>' +
+                  "</li>"
+                );
+              }).join("") +
+              "</ul>"
+            )
+            : '<div class="hint">No relationships in this cell.</div>'
+        ) +
+        '<div class="allocationMatrixAddRow">' +
+        '<div class="fieldWithBadge">' +
+        '<input id="allocationMatrixAddType" list="allocationMatrixAddTypeList" placeholder="Relationship type">' +
+        '<span id="allocationMatrixAddTypeStatus" class="deviationBadge">Select</span>' +
+        "</div>" +
+        '<datalist id="allocationMatrixAddTypeList">' + addTypeOptionsHtml + "</datalist>" +
+        '<button type="button" data-action="addAllocationRelationship">Add Relationship</button>' +
+        "</div>" +
+        '<div class="hint">Valid types: ' +
+        escapeHtml((validRelationshipTypes.length ? validRelationshipTypes : ["none"]).join(", ")) +
+        ".</div>" +
+        "</div>"
+      )
+      : '<div class="allocationMatrixDetail"><div class="hint">Select a cell to inspect and edit relationships.</div></div>';
+
+    panelElement.innerHTML =
+      '<div class="allocationMatrixSummary">Sources: ' +
+      sourceElements.length +
+      " | Targets: " +
+      targetElements.length +
+      " | Matching relationships: " +
+      Array.from(cellRelationships.values()).reduce(function (sum, entries) {
+        return sum + entries.length;
+      }, 0) +
+      "</div>" +
+      '<div class="allocationMatrixScroll">' +
+      '<table class="allocationMatrixTable">' +
+      "<thead><tr><th></th>" +
+      targetHeader +
+      "</tr></thead>" +
+      "<tbody>" +
+      rowsHtml +
+      "</tbody></table></div>" +
+      selectedDetailHtml;
+
+    if (selectedSource && selectedTarget) {
+      const addTypeInput = panelElement.querySelector("#allocationMatrixAddType");
+      const addTypeStatus = panelElement.querySelector("#allocationMatrixAddTypeStatus");
+      const validTypeSet = new Set(validRelationshipTypes.map(function (value) {
+        return normalizeTypeToken(value);
+      }));
+      if (addTypeInput) {
+        setInputDatalistEntries(
+          addTypeInput,
+          edgeTypeOptions.map(function (typeId) {
+            const key = String(typeId || "").trim();
+            const edgeType = edgeTypeById.get(key) || edgeTypeById.get(key.toLowerCase()) || null;
+            return {
+              value: key,
+              label: (edgeType && edgeType.label) || key,
+              status: validTypeSet.has(normalizeTypeToken(key)) ? "ok" : "warn"
+            };
+          })
+        );
+        bindDatalistFallback(addTypeInput);
+
+        const updateTypeStatus = function () {
+          const rawValue = String(addTypeInput.value || "").trim();
+          if (!rawValue) {
+            setValidityBadge(addTypeStatus, "none", "Select");
+            return;
+          }
+          const isKnown = edgeTypeOptions.some(function (entry) {
+            return normalizeTypeToken(entry) === normalizeTypeToken(rawValue);
+          });
+          const isValid = isKnown && validTypeSet.has(normalizeTypeToken(rawValue));
+          setValidityBadge(addTypeStatus, isValid ? "ok" : "warn", isValid ? "Compliant" : "Deviation");
+        };
+        addTypeInput.addEventListener("input", updateTypeStatus);
+        addTypeInput.addEventListener("change", updateTypeStatus);
+        updateTypeStatus();
+      }
+    }
+  }
+
+  function normalizeRoadmapScale(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (raw === "quarter" || raw === "year" || raw === "month") {
+      return raw;
+    }
+    return "month";
+  }
+
+  function parseIsoDateToUtcMs(value) {
+    const raw = String(value || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return null;
+    }
+    const parsed = Date.parse(raw + "T00:00:00Z");
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+    return parsed;
+  }
+
+  function formatUtcDate(msValue) {
+    if (!Number.isFinite(msValue)) {
+      return "";
+    }
+    const date = new Date(msValue);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function getElementMemberValueByName(element, memberName) {
+    if (!element || !Array.isArray(element.members)) {
+      return "";
+    }
+    const key = String(memberName || "").trim();
+    if (!key) {
+      return "";
+    }
+    const entry = element.members
+      .map(function (member) {
+        return normalizeMemberItem(member);
+      })
+      .find(function (member) {
+        return String(member.name || "").trim() === key;
+      });
+    return entry ? String(entry.value || "").trim() : "";
+  }
+
+  function buildRoadmapRowResult(row, elementById) {
+    const node = elementById.get(row.nodeId) || null;
+    const issues = [];
+    if (!node) {
+      issues.push("Node missing");
+    }
+    const startAttr = String(row.startAttr || "").trim();
+    const endAttr = String(row.endAttr || "").trim();
+    let startMs = null;
+    let endMs = null;
+    let milestoneMs = null;
+    const startRaw = node && startAttr ? getElementMemberValueByName(node, startAttr) : "";
+    const endRaw = node && endAttr ? getElementMemberValueByName(node, endAttr) : "";
+    if (startAttr) {
+      if (!startRaw) {
+        issues.push("Start attribute missing");
+      } else {
+        startMs = parseIsoDateToUtcMs(startRaw);
+        if (startMs == null) {
+          issues.push("Start date invalid");
+        }
+      }
+    }
+    if (endAttr) {
+      if (!endRaw) {
+        issues.push("End attribute missing");
+      } else {
+        endMs = parseIsoDateToUtcMs(endRaw);
+        if (endMs == null) {
+          issues.push("End date invalid");
+        }
+      }
+    }
+    if (!startAttr && !endAttr) {
+      issues.push("No start/end attribute selected");
+    }
+    let mode = "milestone";
+    if (startAttr && endAttr) {
+      mode = "range";
+      if (startMs != null && endMs != null && startMs > endMs) {
+        issues.push("Start after end");
+      }
+    } else if (startMs != null) {
+      milestoneMs = startMs;
+    } else if (endMs != null) {
+      milestoneMs = endMs;
+    }
+    const startBound = mode === "range" ? startMs : milestoneMs;
+    const endBound = mode === "range" ? endMs : milestoneMs;
+    return {
+      row: row,
+      node: node,
+      mode: mode,
+      startMs: startMs,
+      endMs: endMs,
+      milestoneMs: milestoneMs,
+      startBound: startBound,
+      endBound: endBound,
+      issues: issues,
+      isCompliant: issues.length === 0
+    };
+  }
+
+  function renderRoadmapPanel(panelElement, payload) {
+    if (!panelElement) {
+      return;
+    }
+    const elements = Array.isArray(payload.elements) ? payload.elements : [];
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    const diagramStartMs = parseIsoDateToUtcMs(payload.startDate || "");
+    const diagramEndMs = parseIsoDateToUtcMs(payload.endDate || "");
+    const scale = normalizeRoadmapScale(payload.scale || "month");
+    const elementById = new Map(
+      elements.map(function (entry) {
+        return [entry.id, entry];
+      })
+    );
+    const resolvedRows = rows.map(function (row) {
+      return buildRoadmapRowResult(row, elementById);
+    });
+    const validBounds = resolvedRows
+      .filter(function (entry) {
+        return Number.isFinite(entry.startBound) && Number.isFinite(entry.endBound);
+      });
+    let minMs = Number.isFinite(diagramStartMs) ? diagramStartMs : null;
+    let maxMs = Number.isFinite(diagramEndMs) ? diagramEndMs : null;
+    if (minMs == null && validBounds.length) {
+      minMs = Math.min.apply(null, validBounds.map(function (entry) { return entry.startBound; }));
+    }
+    if (maxMs == null && validBounds.length) {
+      maxMs = Math.max.apply(null, validBounds.map(function (entry) { return entry.endBound; }));
+    }
+    if (minMs == null) {
+      minMs = Date.now() - (14 * 24 * 60 * 60 * 1000);
+    }
+    if (maxMs == null) {
+      maxMs = Date.now() + (120 * 24 * 60 * 60 * 1000);
+    }
+    if (maxMs <= minMs) {
+      maxMs = minMs + (24 * 60 * 60 * 1000);
+    }
+    const spanMs = maxMs - minMs;
+    const toPercent = function (ms) {
+      return clamp(((ms - minMs) / spanMs) * 100, 0, 100);
+    };
+
+    const tickDates = [];
+    const cursor = new Date(minMs);
+    cursor.setUTCHours(0, 0, 0, 0);
+    if (scale === "year") {
+      cursor.setUTCMonth(0, 1);
+    } else if (scale === "quarter") {
+      cursor.setUTCMonth(Math.floor(cursor.getUTCMonth() / 3) * 3, 1);
+    } else {
+      cursor.setUTCDate(1);
+    }
+    if (cursor.getTime() > minMs) {
+      if (scale === "year") {
+        cursor.setUTCFullYear(cursor.getUTCFullYear() - 1);
+      } else if (scale === "quarter") {
+        cursor.setUTCMonth(cursor.getUTCMonth() - 3);
+      } else {
+        cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+      }
+    }
+    while (cursor.getTime() <= maxMs) {
+      tickDates.push(new Date(cursor.getTime()));
+      if (scale === "year") {
+        cursor.setUTCFullYear(cursor.getUTCFullYear() + 1);
+      } else if (scale === "quarter") {
+        cursor.setUTCMonth(cursor.getUTCMonth() + 3);
+      } else {
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
+    }
+    const ticksHtml = tickDates
+      .map(function (dateValue) {
+        const ms = dateValue.getTime();
+        const left = toPercent(ms);
+        let label = String(dateValue.getUTCFullYear());
+        if (scale === "month") {
+          label = String(dateValue.getUTCFullYear()) + "-" + String(dateValue.getUTCMonth() + 1).padStart(2, "0");
+        } else if (scale === "quarter") {
+          label = String(dateValue.getUTCFullYear()) + "-Q" + (Math.floor(dateValue.getUTCMonth() / 3) + 1);
+        }
+        return (
+          '<div class="roadmapTick" style="left:' + left + '%;">' +
+          '<span class="roadmapTickLine"></span>' +
+          '<span class="roadmapTickLabel">' + escapeHtml(label) + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    const rowsHtml = resolvedRows
+      .map(function (entry) {
+        const nodeName = entry.node ? (entry.node.name || entry.node.id) : entry.row.nodeId;
+        const rowLabel = String(entry.row.label || "").trim() || nodeName;
+        const isSelected = payload.selectedRowId && payload.selectedRowId === entry.row.id;
+        const rowClasses = ["roadmapRow"];
+        if (!entry.isCompliant) {
+          rowClasses.push("deviation");
+        }
+        if (isSelected) {
+          rowClasses.push("selected");
+        }
+        let timelineInnerHtml = "";
+        if (entry.mode === "range" && Number.isFinite(entry.startMs) && Number.isFinite(entry.endMs)) {
+          const left = toPercent(entry.startMs);
+          const right = toPercent(entry.endMs);
+          const width = Math.max(0.8, right - left);
+          timelineInnerHtml =
+            '<div class="roadmapBar" style="left:' +
+            left +
+            "%;width:" +
+            width +
+            '%;" title="' +
+            escapeHtml(formatUtcDate(entry.startMs) + " to " + formatUtcDate(entry.endMs)) +
+            '"></div>';
+        } else if (entry.mode === "milestone" && Number.isFinite(entry.milestoneMs)) {
+          const left = toPercent(entry.milestoneMs);
+          timelineInnerHtml =
+            '<div class="roadmapMilestone" style="left:' +
+            left +
+            '%;" title="' +
+            escapeHtml(formatUtcDate(entry.milestoneMs)) +
+            '"></div>';
+        } else {
+          timelineInnerHtml = '<div class="roadmapInvalidHint">Missing or invalid date values</div>';
+        }
+        const issuesText = entry.issues.length
+          ? '<div class="roadmapIssues">' + escapeHtml(entry.issues.join(", ")) + "</div>"
+          : "";
+        return (
+          '<div class="' +
+          rowClasses.join(" ") +
+          '" data-action="selectRoadmapRow" data-row-id="' +
+          entry.row.id +
+          '">' +
+          '<div class="roadmapRowLabel">' +
+          escapeHtml(rowLabel) +
+          '<span class="roadmapRowNodeId">(' + escapeHtml(entry.row.nodeId || "-") + ")</span>" +
+          "</div>" +
+          '<div class="roadmapTrack">' +
+          timelineInnerHtml +
+          "</div>" +
+          issuesText +
+          "</div>"
+        );
+      })
+      .join("");
+
+    const compliantCount = resolvedRows.filter(function (entry) {
+      return entry.isCompliant;
+    }).length;
+    panelElement.innerHTML =
+      '<div class="roadmapSummary">' +
+      "Rows: " +
+      resolvedRows.length +
+      " | Compliant: " +
+      compliantCount +
+      " | Deviations: " +
+      (resolvedRows.length - compliantCount) +
+      " | Range: " +
+      escapeHtml(formatUtcDate(minMs)) +
+      " to " +
+      escapeHtml(formatUtcDate(maxMs)) +
+      " (" +
+      escapeHtml(scale) +
+      ")" +
+      "</div>" +
+      '<div class="roadmapTimelineHeader">' +
+      '<div class="roadmapLabelHeader">Capability / Row</div>' +
+      '<div class="roadmapTrackHeader">' + ticksHtml + "</div>" +
+      "</div>" +
+      '<div class="roadmapRows">' + rowsHtml + "</div>";
   }
 
   function describeAllowedNodeTypes(values, nodeTypeById) {
@@ -5115,11 +5980,32 @@
     setSelectOptions(dom.selectedNodeViewpoint, effectiveBaseline.viewpoints);
     setSelectOptions(dom.selectedNodeType, nodeTypeOptions);
     setSelectOptions(dom.selectedEdgeType, edgeTypeOptions);
+    setInputDatalistEntries(
+      dom.roadmapRowNode,
+      (currentState.model.elements || []).map(function (element) {
+        return {
+          value: formatElementInputLabel(element),
+          label: formatElementInputLabel(element)
+        };
+      })
+    );
+    const allocationViewOptions = ["All"].concat(
+      dedupe(
+        (effectiveBaseline.viewpoints || []).concat(
+          modelViews,
+          hasUnassignedView ? ["Unassigned"] : []
+        )
+      )
+    );
+    setSelectOptions(dom.diagramAllocationSourceView, allocationViewOptions);
+    setSelectOptions(dom.diagramAllocationTargetView, allocationViewOptions);
+    setSelectOptions(dom.diagramAllocationRelType, ["All"].concat(edgeTypeOptions));
     applySelectStereotypeLabels(dom.elementType, nodeTypeById);
     applySelectStereotypeLabels(dom.relType, edgeTypeById);
     applySelectStereotypeLabels(dom.newDiagramElementType, nodeTypeById);
     applySelectStereotypeLabels(dom.selectedNodeType, nodeTypeById);
     applySelectStereotypeLabels(dom.selectedEdgeType, edgeTypeById);
+    syncEditingFormsWithState(currentState);
     const baselineSignature = [
       effectiveBaseline.name,
       effectiveBaseline.version,
@@ -5163,7 +6049,9 @@
       !!currentState.ui.leftEditCollapsed;
     dom.toggleLeftAllBtn.textContent = allLeftCollapsed ? "Expand All Left UI" : "Collapse All Left UI";
 
-    dom.diagramToolbarWrap.hidden = !!currentState.ui.rightToolbarCollapsed;
+    const isAllocationDiagram = !!(activeDiagram && activeDiagram.type === "allocationMatrix");
+    const isRoadmapDiagram = !!(activeDiagram && activeDiagram.type === "roadmap");
+    dom.diagramToolbarWrap.hidden = !!currentState.ui.rightToolbarCollapsed || isAllocationDiagram || isRoadmapDiagram;
     dom.diagramMetaWrap.hidden = !!currentState.ui.rightMetaCollapsed;
     dom.toggleRightToolbarBtn.textContent = currentState.ui.rightToolbarCollapsed ? "Expand Toolbar" : "Collapse Toolbar";
     dom.toggleRightMetaBtn.textContent = currentState.ui.rightMetaCollapsed ? "Expand Meta" : "Collapse Meta";
@@ -5370,11 +6258,68 @@
     dom.diagramEditBar.hidden = !activeDiagram;
     if (activeDiagram) {
       dom.diagramNameInput.value = activeDiagram.name || "";
-      dom.diagramTypeSelect.value = activeDiagram.type || "standard";
+      dom.diagramTypeSelect.value = normalizeDiagramType(activeDiagram.type || "standard");
       dom.diagramTitleInput.value = activeDiagram.title || activeDiagram.name || "";
       dom.diagramViewInput.value = activeDiagram.view || "";
       dom.standardDiagramControls.hidden = activeDiagram.type !== "standard";
       dom.clickableDiagramControls.hidden = activeDiagram.type !== "clickable";
+      if (dom.allocationDiagramControls) {
+        dom.allocationDiagramControls.hidden = activeDiagram.type !== "allocationMatrix";
+      }
+      if (dom.roadmapDiagramControls) {
+        dom.roadmapDiagramControls.hidden = activeDiagram.type !== "roadmap";
+      }
+      if (activeDiagram.type !== "roadmap") {
+        editingRoadmapRowId = null;
+      }
+      if (dom.diagramAllocationSourceView) {
+        dom.diagramAllocationSourceView.value = allocationViewOptions.indexOf(activeDiagram.allocationSourceView || "All") >= 0
+          ? (activeDiagram.allocationSourceView || "All")
+          : "All";
+      }
+      if (dom.diagramAllocationTargetView) {
+        dom.diagramAllocationTargetView.value = allocationViewOptions.indexOf(activeDiagram.allocationTargetView || "All") >= 0
+          ? (activeDiagram.allocationTargetView || "All")
+          : "All";
+      }
+      if (dom.diagramAllocationRelType) {
+        const relationshipTypeOptions = ["All"].concat(edgeTypeOptions);
+        dom.diagramAllocationRelType.value = relationshipTypeOptions.indexOf(activeDiagram.allocationRelationshipType || "All") >= 0
+          ? (activeDiagram.allocationRelationshipType || "All")
+          : "All";
+      }
+      if (dom.roadmapRowsList) {
+        const rows = Array.isArray(activeDiagram.roadmapRows) ? activeDiagram.roadmapRows : [];
+        dom.roadmapRowsList.innerHTML = rows
+          .map(function (row, index) {
+            const element = (currentState.model.elements || []).find(function (entry) {
+              return entry.id === row.nodeId;
+            });
+            const nodeLabel = element ? element.name : (row.nodeId || "-");
+            const startAttr = String(row.startAttr || "").trim();
+            const endAttr = String(row.endAttr || "").trim();
+            const detail = startAttr && endAttr
+              ? ("range: " + startAttr + " -> " + endAttr)
+              : ("milestone: " + (startAttr || endAttr || "-"));
+            return '<option value="' + row.id + '">' + (index + 1) + ". " + nodeLabel + " | " + detail + "</option>";
+          })
+          .join("");
+        if (editingRoadmapRowId && rows.some(function (entry) { return entry.id === editingRoadmapRowId; })) {
+          dom.roadmapRowsList.value = editingRoadmapRowId;
+        } else {
+          editingRoadmapRowId = null;
+          dom.roadmapRowsList.value = "";
+        }
+      }
+      updateRoadmapRowAttributePickers(currentState.model.elements || []);
+      updateRoadmapRowValidityBadges(currentState.model.elements || []);
+      updateRoadmapDateInputStatuses();
+      if (dom.roadmapAddOrUpdateRowBtn) {
+        dom.roadmapAddOrUpdateRowBtn.textContent = editingRoadmapRowId ? "Update Row" : "Add Row";
+      }
+      if (dom.roadmapCancelEditRowBtn) {
+        dom.roadmapCancelEditRowBtn.hidden = !editingRoadmapRowId;
+      }
       const listedIds = Array.isArray(activeDiagram.elementIds) ? activeDiagram.elementIds : [];
       const listedIdSet = new Set(listedIds);
       const activeViewpointFilter = currentState.ui.viewpointFilter || "All";
@@ -5463,7 +6408,7 @@
           return String(a.name || a.id || "").toLowerCase().localeCompare(String(b.name || b.id || "").toLowerCase());
         });
       if (dom.diagramFindControls) {
-        dom.diagramFindControls.hidden = false;
+        dom.diagramFindControls.hidden = activeDiagram.type === "allocationMatrix" || activeDiagram.type === "roadmap";
       }
       if (dom.diagramFindFilter) {
         dom.diagramFindFilter.value = currentState.ui.diagramFindQuery || "";
@@ -5499,6 +6444,12 @@
     } else {
       dom.standardDiagramControls.hidden = true;
       dom.clickableDiagramControls.hidden = true;
+      if (dom.allocationDiagramControls) {
+        dom.allocationDiagramControls.hidden = true;
+      }
+      if (dom.roadmapDiagramControls) {
+        dom.roadmapDiagramControls.hidden = true;
+      }
       dom.deleteActiveDiagramBtn.disabled = true;
       dom.addElementToDiagramBtn.disabled = true;
       dom.diagramElementPicker.value = "";
@@ -5517,6 +6468,7 @@
         dom.diagramElementPickerLabel.textContent = "Available Elements (0 total, 0 after filter)";
       }
       dom.diagramMetaDisplay.innerHTML = "";
+      editingRoadmapRowId = null;
     }
 
     dom.relationshipSearchInput.value = currentState.ui.relationshipSearch || "";
@@ -5655,7 +6607,26 @@
         ? getClickableScope(currentState, activeDiagram)
         : null;
     const isClickableDiagramMode = !!(activeDiagram && activeDiagram.type === "clickable");
+    const isAllocationDiagramMode = !!(activeDiagram && activeDiagram.type === "allocationMatrix");
+    const isRoadmapDiagramMode = !!(activeDiagram && activeDiagram.type === "roadmap");
+    if (!isAllocationDiagramMode && allocationMatrixSelection) {
+      allocationMatrixSelection = null;
+    }
     dom.diagramCanvasPane.classList.toggle("clickableDiagramMode", isClickableDiagramMode);
+    dom.diagramCanvasPane.classList.toggle("allocationDiagramMode", isAllocationDiagramMode);
+    dom.diagramCanvasPane.classList.toggle("roadmapDiagramMode", isRoadmapDiagramMode);
+    if (dom.diagramSvg) {
+      dom.diagramSvg.hidden = isAllocationDiagramMode || isRoadmapDiagramMode;
+      dom.diagramSvg.style.display = (isAllocationDiagramMode || isRoadmapDiagramMode) ? "none" : "block";
+    }
+    if (dom.allocationMatrixPanel) {
+      dom.allocationMatrixPanel.hidden = !isAllocationDiagramMode;
+      dom.allocationMatrixPanel.style.display = isAllocationDiagramMode ? "grid" : "none";
+    }
+    if (dom.roadmapPanel) {
+      dom.roadmapPanel.hidden = !isRoadmapDiagramMode;
+      dom.roadmapPanel.style.display = isRoadmapDiagramMode ? "grid" : "none";
+    }
     const visibleElementIds =
       activeDiagram && activeDiagram.type === "standard"
         ? new Set(activeDiagram.elementIds || [])
@@ -5665,37 +6636,75 @@
 
     const effectiveDiagramViewpointFilter = currentState.ui.viewpointFilter || "All";
     const diagramElements = applyDiagramLayoutToElements(currentState.model.elements || [], activeDiagram);
+    if (isAllocationDiagramMode) {
+      Array.from((dom.diagramSvg && dom.diagramSvg.querySelectorAll("g.renderGroup")) || []).forEach(function (node) {
+        node.remove();
+      });
+      if (
+        allocationMatrixSelection &&
+        (
+          !currentState.model.elements.some(function (entry) { return entry.id === allocationMatrixSelection.sourceId; }) ||
+          !currentState.model.elements.some(function (entry) { return entry.id === allocationMatrixSelection.targetId; })
+        )
+      ) {
+        allocationMatrixSelection = null;
+      }
+      renderAllocationMatrixPanel(dom.allocationMatrixPanel, {
+        elements: currentState.model.elements || [],
+        relationships: currentState.model.relationships || [],
+        sourceView: activeDiagram ? activeDiagram.allocationSourceView : "All",
+        targetView: activeDiagram ? activeDiagram.allocationTargetView : "All",
+        relationshipType: activeDiagram ? activeDiagram.allocationRelationshipType : "All",
+        edgeTypeById: edgeTypeById,
+        relationshipResultById: relationshipResultById,
+        edgeTypeOptions: edgeTypeOptions,
+        effectiveBaseline: effectiveBaseline,
+        activeSelection: allocationMatrixSelection
+      });
+    } else if (isRoadmapDiagramMode) {
+      Array.from((dom.diagramSvg && dom.diagramSvg.querySelectorAll("g.renderGroup")) || []).forEach(function (node) {
+        node.remove();
+      });
+      renderRoadmapPanel(dom.roadmapPanel, {
+        elements: currentState.model.elements || [],
+        rows: (activeDiagram && Array.isArray(activeDiagram.roadmapRows)) ? activeDiagram.roadmapRows : [],
+        startDate: activeDiagram ? activeDiagram.roadmapStartDate : "",
+        endDate: activeDiagram ? activeDiagram.roadmapEndDate : "",
+        scale: activeDiagram ? activeDiagram.roadmapTimeScale : "month",
+        selectedRowId: editingRoadmapRowId || ((dom.roadmapRowsList && dom.roadmapRowsList.value) || "")
+      });
+    } else {
+      const diagramRenderResult = diagram.render({
+        elements: diagramElements,
+        relationships: currentState.model.relationships,
+        viewpointFilter: effectiveDiagramViewpointFilter,
+        lineMode: effectiveLineMode,
+        colorScheme: effectiveColorScheme,
+        visibleElementIds: visibleElementIds,
+        diagramType: activeDiagram ? activeDiagram.type : "standard",
+        clickableMetaById: clickableScope ? clickableScope.metaById : new Map(),
+        edgeTypeById: edgeTypeById,
+        relationshipResultById: relationshipResultById,
+        nodeTypeById: nodeTypeById,
+        focusElementId: activeDiagram && activeDiagram.type === "clickable" ? activeDiagram.focusElementId : null,
+        selectedNodeId: currentState.ui.selectedNodeId || null,
+        selectedNodeIds: Array.isArray(currentState.ui.selectedNodeIds) ? currentState.ui.selectedNodeIds : [],
+        selectedEdgeId: currentState.ui.selectedEdgeId || null
+      });
 
-    const diagramRenderResult = diagram.render({
-      elements: diagramElements,
-      relationships: currentState.model.relationships,
-      viewpointFilter: effectiveDiagramViewpointFilter,
-      lineMode: effectiveLineMode,
-      colorScheme: effectiveColorScheme,
-      visibleElementIds: visibleElementIds,
-      diagramType: activeDiagram ? activeDiagram.type : "standard",
-      clickableMetaById: clickableScope ? clickableScope.metaById : new Map(),
-      edgeTypeById: edgeTypeById,
-      relationshipResultById: relationshipResultById,
-      nodeTypeById: nodeTypeById,
-      focusElementId: activeDiagram && activeDiagram.type === "clickable" ? activeDiagram.focusElementId : null,
-      selectedNodeId: currentState.ui.selectedNodeId || null,
-      selectedNodeIds: Array.isArray(currentState.ui.selectedNodeIds) ? currentState.ui.selectedNodeIds : [],
-      selectedEdgeId: currentState.ui.selectedEdgeId || null
-    });
-
-    const normalizedPan = applyDiagramZoom(
-      dom.diagramSvg,
-      (diagramRenderResult && diagramRenderResult.contentBounds) || null,
-      currentState.ui.diagramZoom || 100,
-      currentState.ui.diagramPanX || 0,
-      currentState.ui.diagramPanY || 0
-    );
-    if (
-      Math.abs((currentState.ui.diagramPanX || 0) - normalizedPan.panX) > 0.01 ||
-      Math.abs((currentState.ui.diagramPanY || 0) - normalizedPan.panY) > 0.01
-    ) {
-      setUi({ diagramPanX: normalizedPan.panX, diagramPanY: normalizedPan.panY });
+      const normalizedPan = applyDiagramZoom(
+        dom.diagramSvg,
+        (diagramRenderResult && diagramRenderResult.contentBounds) || null,
+        currentState.ui.diagramZoom || 100,
+        currentState.ui.diagramPanX || 0,
+        currentState.ui.diagramPanY || 0
+      );
+      if (
+        Math.abs((currentState.ui.diagramPanX || 0) - normalizedPan.panX) > 0.01 ||
+        Math.abs((currentState.ui.diagramPanY || 0) - normalizedPan.panY) > 0.01
+      ) {
+        setUi({ diagramPanX: normalizedPan.panX, diagramPanY: normalizedPan.panY });
+      }
     }
 
     dom.connectModeBtn.textContent = "Connect Mode: " + (diagram.connectMode ? "On" : "Off");
@@ -5709,6 +6718,8 @@
     });
     const shouldShowDrawer =
       currentState.ui.activeTab === "diagramTab" &&
+      !isAllocationDiagramMode &&
+      !isRoadmapDiagramMode &&
       !!currentState.ui.selectionDrawerOpen &&
       (!!selectedNode || !!selectedEdge);
     dom.selectionDrawer.hidden = !shouldShowDrawer;
@@ -6095,6 +7106,12 @@
     bindDatalistFallback(dom.diagramFocusSelect);
     bindDatalistFallback(dom.diagramViewInput);
     bindDatalistFallback(dom.diagramRelType);
+    bindDatalistFallback(dom.diagramAllocationSourceView);
+    bindDatalistFallback(dom.diagramAllocationTargetView);
+    bindDatalistFallback(dom.diagramAllocationRelType);
+    bindDatalistFallback(dom.roadmapRowNode);
+    bindDatalistFallback(dom.roadmapRowStartAttr);
+    bindDatalistFallback(dom.roadmapRowEndAttr);
 
     on(dom.categoryLegend, "change", function (event) {
       const input = event.target;
@@ -6339,6 +7356,14 @@
         type: "standard",
         lineMode: normalizeLineMode((getState().ui && getState().ui.lineMode) || "straight"),
         elementIds: [],
+        elementLayout: {},
+        allocationSourceView: "All",
+        allocationTargetView: "All",
+        allocationRelationshipType: "All",
+        roadmapTimeScale: "month",
+        roadmapStartDate: "",
+        roadmapEndDate: "",
+        roadmapRows: [],
         focusElementId: getState().model.elements[0] ? getState().model.elements[0].id : null,
         depth: 1
       };
@@ -6362,16 +7387,320 @@
       if (!activeDiagram) {
         return;
       }
-      const nextType = String(event.target.value || "").trim().toLowerCase() === "clickable" ? "clickable" : "standard";
+      const nextType = normalizeDiagramType(event.target.value || "standard");
       event.target.value = nextType;
+      if (nextType !== "roadmap") {
+        editingRoadmapRowId = null;
+      }
       upsertDiagram({
         ...activeDiagram,
         type: nextType,
         title: activeDiagram.title || activeDiagram.name || "Diagram",
         view: activeDiagram.view || "",
+        allocationSourceView: activeDiagram.allocationSourceView || "All",
+        allocationTargetView: activeDiagram.allocationTargetView || "All",
+        allocationRelationshipType: activeDiagram.allocationRelationshipType || "All",
+        roadmapTimeScale: normalizeRoadmapScale(activeDiagram.roadmapTimeScale || "month"),
+        roadmapStartDate: String(activeDiagram.roadmapStartDate || "").trim(),
+        roadmapEndDate: String(activeDiagram.roadmapEndDate || "").trim(),
+        roadmapRows: Array.isArray(activeDiagram.roadmapRows) ? activeDiagram.roadmapRows : [],
         depth: activeDiagram.depth || 1,
         focusElementId: activeDiagram.focusElementId || (current.model.elements[0] ? current.model.elements[0].id : null)
       });
+    });
+
+    function updateActiveAllocationDiagramFilters() {
+      const current = getState();
+      const activeDiagram = getActiveDiagram(current);
+      if (!activeDiagram || activeDiagram.type !== "allocationMatrix") {
+        return;
+      }
+      upsertDiagram({
+        ...activeDiagram,
+        allocationSourceView: (dom.diagramAllocationSourceView && dom.diagramAllocationSourceView.value) || "All",
+        allocationTargetView: (dom.diagramAllocationTargetView && dom.diagramAllocationTargetView.value) || "All",
+        allocationRelationshipType: (dom.diagramAllocationRelType && dom.diagramAllocationRelType.value) || "All"
+      });
+    }
+
+    on(dom.diagramAllocationSourceView, "input", updateActiveAllocationDiagramFilters);
+    on(dom.diagramAllocationTargetView, "input", updateActiveAllocationDiagramFilters);
+    on(dom.diagramAllocationRelType, "input", updateActiveAllocationDiagramFilters);
+
+    function resetRoadmapRowEditor() {
+      editingRoadmapRowId = null;
+      if (dom.roadmapRowsList) {
+        dom.roadmapRowsList.value = "";
+      }
+      if (dom.roadmapRowNode) {
+        dom.roadmapRowNode.value = "";
+      }
+      if (dom.roadmapRowStartAttr) {
+        dom.roadmapRowStartAttr.value = "";
+      }
+      if (dom.roadmapRowEndAttr) {
+        dom.roadmapRowEndAttr.value = "";
+      }
+      if (dom.roadmapRowLabel) {
+        dom.roadmapRowLabel.value = "";
+      }
+      if (dom.roadmapStartDateValue) {
+        dom.roadmapStartDateValue.value = "";
+      }
+      if (dom.roadmapEndDateValue) {
+        dom.roadmapEndDateValue.value = "";
+      }
+      updateRoadmapRowAttributePickers(getState().model.elements || []);
+      updateRoadmapRowValidityBadges(getState().model.elements || []);
+      updateRoadmapDateInputStatuses();
+      render();
+    }
+
+    on(dom.roadmapRowNode, "input", function () {
+      updateRoadmapRowAttributePickers(getState().model.elements || []);
+      updateRoadmapRowValidityBadges(getState().model.elements || []);
+    });
+    on(dom.roadmapRowStartAttr, "input", function () {
+      updateRoadmapRowValidityBadges(getState().model.elements || []);
+    });
+    on(dom.roadmapRowEndAttr, "input", function () {
+      updateRoadmapRowValidityBadges(getState().model.elements || []);
+    });
+    on(dom.roadmapStartDateValue, "input", function () {
+      updateRoadmapDateInputStatuses();
+    });
+    on(dom.roadmapEndDateValue, "input", function () {
+      updateRoadmapDateInputStatuses();
+    });
+    on(dom.roadmapRowsList, "change", function () {
+      const current = getState();
+      const activeDiagram = getActiveDiagram(current);
+      if (!activeDiagram || activeDiagram.type !== "roadmap") {
+        return;
+      }
+      const rowId = String((dom.roadmapRowsList && dom.roadmapRowsList.value) || "").trim();
+      const row = (activeDiagram.roadmapRows || []).find(function (entry) {
+        return entry.id === rowId;
+      });
+      if (!row) {
+        editingRoadmapRowId = null;
+        return;
+      }
+      editingRoadmapRowId = row.id;
+      const selectedNode = (current.model.elements || []).find(function (entry) {
+        return entry.id === row.nodeId;
+      });
+      if (dom.roadmapRowNode) {
+        dom.roadmapRowNode.value = selectedNode ? formatElementInputLabel(selectedNode) : (row.nodeId || "");
+      }
+      if (dom.roadmapRowStartAttr) {
+        dom.roadmapRowStartAttr.value = row.startAttr || "";
+      }
+      if (dom.roadmapRowEndAttr) {
+        dom.roadmapRowEndAttr.value = row.endAttr || "";
+      }
+      if (dom.roadmapRowLabel) {
+        dom.roadmapRowLabel.value = row.label || "";
+      }
+      const selectedElementForValues = selectedNode || null;
+      if (dom.roadmapStartDateValue) {
+        dom.roadmapStartDateValue.value = selectedElementForValues
+          ? getElementMemberValueByName(selectedElementForValues, row.startAttr || "")
+          : "";
+      }
+      if (dom.roadmapEndDateValue) {
+        dom.roadmapEndDateValue.value = selectedElementForValues
+          ? getElementMemberValueByName(selectedElementForValues, row.endAttr || "")
+          : "";
+      }
+      updateRoadmapRowAttributePickers(current.model.elements || []);
+      updateRoadmapRowValidityBadges(current.model.elements || []);
+      updateRoadmapDateInputStatuses();
+      render();
+    });
+    on(dom.roadmapAddOrUpdateRowBtn, "click", function () {
+      const current = getState();
+      const activeDiagram = getActiveDiagram(current);
+      if (!activeDiagram || activeDiagram.type !== "roadmap") {
+        return;
+      }
+      const nodeId = resolveElementInputToId(dom.roadmapRowNode && dom.roadmapRowNode.value, current.model.elements || []);
+      if (!nodeId) {
+        return;
+      }
+      const startAttr = String((dom.roadmapRowStartAttr && dom.roadmapRowStartAttr.value) || "").trim();
+      const endAttr = String((dom.roadmapRowEndAttr && dom.roadmapRowEndAttr.value) || "").trim();
+      const inferredMode = startAttr && endAttr ? "range" : "milestone";
+      const row = {
+        id: editingRoadmapRowId || createId("rr"),
+        nodeId: nodeId,
+        mode: inferredMode,
+        startAttr: startAttr,
+        endAttr: endAttr,
+        milestoneAttr: "",
+        label: String((dom.roadmapRowLabel && dom.roadmapRowLabel.value) || "").trim()
+      };
+      if (!row.startAttr && !row.endAttr) {
+        return;
+      }
+      const rows = Array.isArray(activeDiagram.roadmapRows) ? activeDiagram.roadmapRows.slice() : [];
+      const index = rows.findIndex(function (entry) {
+        return entry.id === row.id;
+      });
+      if (index >= 0) {
+        rows[index] = row;
+      } else {
+        rows.push(row);
+      }
+      upsertDiagram({
+        ...activeDiagram,
+        roadmapRows: rows
+      });
+      editingRoadmapRowId = row.id;
+    });
+    on(dom.roadmapCancelEditRowBtn, "click", function () {
+      resetRoadmapRowEditor();
+    });
+    on(dom.roadmapRemoveRowBtn, "click", function () {
+      const current = getState();
+      const activeDiagram = getActiveDiagram(current);
+      if (!activeDiagram || activeDiagram.type !== "roadmap") {
+        return;
+      }
+      const rowId = String((dom.roadmapRowsList && dom.roadmapRowsList.value) || "").trim();
+      if (!rowId) {
+        return;
+      }
+      upsertDiagram({
+        ...activeDiagram,
+        roadmapRows: (activeDiagram.roadmapRows || []).filter(function (row) {
+          return row.id !== rowId;
+        })
+      });
+      resetRoadmapRowEditor();
+    });
+    function upsertRoadmapNodeAttribute(attributeName, attributeValue) {
+      const current = getState();
+      const nodeId = resolveElementInputToId(dom.roadmapRowNode && dom.roadmapRowNode.value, current.model.elements || []);
+      if (!nodeId || !attributeName || !attributeValue) {
+        return;
+      }
+      if (parseIsoDateToUtcMs(attributeValue) == null) {
+        return;
+      }
+      const node = (current.model.elements || []).find(function (entry) {
+        return entry.id === nodeId;
+      });
+      if (!node) {
+        return;
+      }
+      const nextMembers = Array.isArray(node.members)
+        ? node.members.map(function (entry) { return normalizeMemberItem(entry); })
+        : [];
+      const index = nextMembers.findIndex(function (entry) {
+        return String(entry.name || "").trim() === attributeName;
+      });
+      if (index >= 0) {
+        nextMembers[index] = { name: attributeName, value: attributeValue };
+      } else {
+        nextMembers.push({ name: attributeName, value: attributeValue });
+      }
+      upsertElement({
+        ...node,
+        members: nextMembers
+      });
+      updateRoadmapRowAttributePickers(getState().model.elements || []);
+      updateRoadmapRowValidityBadges(getState().model.elements || []);
+    }
+    on(dom.roadmapSetStartAttrBtn, "click", function () {
+      const attributeName = String((dom.roadmapRowStartAttr && dom.roadmapRowStartAttr.value) || "").trim();
+      const attributeValue = String((dom.roadmapStartDateValue && dom.roadmapStartDateValue.value) || "").trim();
+      upsertRoadmapNodeAttribute(attributeName, attributeValue);
+      updateRoadmapDateInputStatuses();
+    });
+    on(dom.roadmapSetEndAttrBtn, "click", function () {
+      const attributeName = String((dom.roadmapRowEndAttr && dom.roadmapRowEndAttr.value) || "").trim();
+      const attributeValue = String((dom.roadmapEndDateValue && dom.roadmapEndDateValue.value) || "").trim();
+      upsertRoadmapNodeAttribute(attributeName, attributeValue);
+      updateRoadmapDateInputStatuses();
+    });
+    on(dom.roadmapPanel, "click", function (event) {
+      const target = event.target && event.target.closest ? event.target.closest("[data-action][data-row-id]") : null;
+      if (!target || String(target.dataset.action || "") !== "selectRoadmapRow") {
+        return;
+      }
+      const rowId = String(target.dataset.rowId || "").trim();
+      if (!rowId) {
+        return;
+      }
+      if (dom.roadmapRowsList) {
+        dom.roadmapRowsList.value = rowId;
+      }
+      if (dom.roadmapRowsList) {
+        dom.roadmapRowsList.dispatchEvent(new Event("change"));
+      }
+    });
+
+    on(dom.allocationMatrixPanel, "click", function (event) {
+      const target = event.target && event.target.closest ? event.target.closest("[data-action]") : null;
+      if (!target) {
+        return;
+      }
+      const action = String(target.dataset.action || "");
+      if (action === "selectAllocationCell") {
+        const sourceId = String(target.dataset.sourceId || "").trim();
+        const targetId = String(target.dataset.targetId || "").trim();
+        if (!sourceId || !targetId) {
+          return;
+        }
+        allocationMatrixSelection = { sourceId: sourceId, targetId: targetId };
+        render();
+        return;
+      }
+      if (action === "deleteAllocationRelationship") {
+        const relationshipId = String(target.dataset.relationshipId || "").trim();
+        if (!relationshipId) {
+          return;
+        }
+        deleteRelationship(relationshipId);
+        return;
+      }
+      if (action === "addAllocationRelationship") {
+        const current = getState();
+        const activeDiagram = getActiveDiagram(current);
+        if (!activeDiagram || activeDiagram.type !== "allocationMatrix" || !allocationMatrixSelection) {
+          return;
+        }
+        const addTypeInput = document.getElementById("allocationMatrixAddType");
+        const nextType = String((addTypeInput && addTypeInput.value) || "").trim();
+        const baseline = getEffectiveBaseline(current.baseline);
+        const fallbackType = (baseline.edgeTypes && baseline.edgeTypes[0]) || "Association";
+        const sourceElement = (current.model.elements || []).find(function (entry) {
+          return entry.id === allocationMatrixSelection.sourceId;
+        }) || null;
+        const targetElement = (current.model.elements || []).find(function (entry) {
+          return entry.id === allocationMatrixSelection.targetId;
+        }) || null;
+        const edgeRules = ((baseline.architecture && baseline.architecture.edgeTypes) || []);
+        const edgeRuleById = new Map();
+        edgeRules.forEach(function (rule) {
+          if (!rule || !rule.id) {
+            return;
+          }
+          edgeRuleById.set(normalizeTypeToken(rule.id), rule);
+        });
+        const chosenType = nextType || fallbackType;
+        const chosenRule = edgeRuleById.get(normalizeTypeToken(chosenType)) || null;
+        if (!isEdgeTypeValidForNodeSelection(chosenRule, sourceElement, targetElement)) {
+          return;
+        }
+        addRelationship({
+          sourceId: allocationMatrixSelection.sourceId,
+          targetId: allocationMatrixSelection.targetId,
+          type: chosenType,
+          description: ""
+        });
+      }
     });
 
     dom.applyDiagramMetaBtn.addEventListener("click", function () {

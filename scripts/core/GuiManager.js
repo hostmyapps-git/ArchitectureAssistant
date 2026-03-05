@@ -119,6 +119,27 @@
         applyDiagramMetaBtn: document.getElementById("applyDiagramMetaBtn"),
         standardDiagramControls: document.getElementById("standardDiagramControls"),
         clickableDiagramControls: document.getElementById("clickableDiagramControls"),
+        allocationDiagramControls: document.getElementById("allocationDiagramControls"),
+        roadmapDiagramControls: document.getElementById("roadmapDiagramControls"),
+        diagramAllocationSourceView: document.getElementById("diagramAllocationSourceView"),
+        diagramAllocationTargetView: document.getElementById("diagramAllocationTargetView"),
+        diagramAllocationRelType: document.getElementById("diagramAllocationRelType"),
+        roadmapRowNode: document.getElementById("roadmapRowNode"),
+        roadmapRowStartAttr: document.getElementById("roadmapRowStartAttr"),
+        roadmapRowEndAttr: document.getElementById("roadmapRowEndAttr"),
+        roadmapStartDateValue: document.getElementById("roadmapStartDateValue"),
+        roadmapEndDateValue: document.getElementById("roadmapEndDateValue"),
+        roadmapRowLabel: document.getElementById("roadmapRowLabel"),
+        roadmapRowStartAttrStatus: document.getElementById("roadmapRowStartAttrStatus"),
+        roadmapRowEndAttrStatus: document.getElementById("roadmapRowEndAttrStatus"),
+        roadmapStartDateValueStatus: document.getElementById("roadmapStartDateValueStatus"),
+        roadmapEndDateValueStatus: document.getElementById("roadmapEndDateValueStatus"),
+        roadmapAddOrUpdateRowBtn: document.getElementById("roadmapAddOrUpdateRowBtn"),
+        roadmapCancelEditRowBtn: document.getElementById("roadmapCancelEditRowBtn"),
+        roadmapRemoveRowBtn: document.getElementById("roadmapRemoveRowBtn"),
+        roadmapSetStartAttrBtn: document.getElementById("roadmapSetStartAttrBtn"),
+        roadmapSetEndAttrBtn: document.getElementById("roadmapSetEndAttrBtn"),
+        roadmapRowsList: document.getElementById("roadmapRowsList"),
         diagramElementPickerLabel: document.getElementById("diagramElementPickerLabel"),
         diagramElementPicker: document.getElementById("diagramElementPicker"),
         addElementToDiagramBtn: document.getElementById("addElementToDiagramBtn"),
@@ -179,7 +200,9 @@
         selectionDrawerBackdrop: document.getElementById("selectionDrawerBackdrop"),
         selectionDrawer: document.getElementById("selectionDrawer"),
         selectionDrawerCloseBtn: document.getElementById("selectionDrawerCloseBtn"),
-        diagramSvg: document.getElementById("diagramSvg")
+        diagramSvg: document.getElementById("diagramSvg"),
+        allocationMatrixPanel: document.getElementById("allocationMatrixPanel"),
+        roadmapPanel: document.getElementById("roadmapPanel")
       };
     }
   }
